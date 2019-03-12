@@ -1,0 +1,40 @@
+{
+  "name": "@alias-earth/core",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "babel src/core.js --out-file lib/index.js"
+  },
+  "files": [
+    "lib"
+  ],
+  "babel": {
+    "presets": [
+      "@babel/env"
+    ],
+    "plugins": [
+      "@babel/plugin-proposal-object-rest-spread",
+      "@babel/plugin-transform-runtime"
+    ]
+  },
+  "author": "lovvtide",
+  "license": "ISC",
+  "devDependencies": {
+    "@babel/cli": "^7.2.3",
+    "@babel/core": "^7.3.4",
+    "@babel/plugin-proposal-object-rest-spread": "^7.3.4",
+    "@babel/plugin-transform-runtime": "^7.3.4",
+    "@babel/preset-env": "^7.3.4"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.3.4",
+    "axios": "^0.18.0",
+    "eth-sig-util": "^1.4.2",
+    "ethereumjs-util": "^6.1.0",
+    "ethjs": "^0.4.0",
+    "web3": "^1.0.0-beta.48",
+    "web3-utils": "^1.0.0-beta.48"
+  }
+}

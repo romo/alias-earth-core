@@ -1,0 +1,1196 @@
+[
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "beneficiaries",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "name": "value",
+        "type": "bytes32"
+      },
+      {
+        "name": "asUser",
+        "type": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "bool"
+      },
+      {
+        "name": "immutably",
+        "type": "bool"
+      }
+    ],
+    "name": "setDataBytes",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_bool",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "withdrawFunds",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "name": "shareholder",
+        "type": "bytes20"
+      }
+    ],
+    "name": "getShareholder",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "name": "buyerUsername",
+        "type": "bytes20"
+      },
+      {
+        "name": "buyPrice",
+        "type": "uint256"
+      }
+    ],
+    "name": "getMaxNewAsk",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      }
+    ],
+    "name": "icoComplete",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      },
+      {
+        "name": "newOwner",
+        "type": "address"
+      }
+    ],
+    "name": "changeLinkedAddress",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "name": "sellerUsername",
+        "type": "bytes20"
+      },
+      {
+        "name": "sharesOrdered",
+        "type": "uint256"
+      },
+      {
+        "name": "sharePrice",
+        "type": "uint256"
+      },
+      {
+        "name": "newAsk",
+        "type": "uint256"
+      },
+      {
+        "name": "strict",
+        "type": "bool"
+      }
+    ],
+    "name": "buyShares",
+    "outputs": [],
+    "payable": true,
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "beneficiary",
+        "type": "address"
+      }
+    ],
+    "name": "payBeneficiary",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_uint",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "name": "newAsk",
+        "type": "uint256"
+      }
+    ],
+    "name": "lowerAskingPrice",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "directory",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "bytes20"
+      }
+    ],
+    "name": "depositToAccount",
+    "outputs": [],
+    "payable": true,
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "name": "value",
+        "type": "uint256"
+      },
+      {
+        "name": "asUser",
+        "type": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "bool"
+      },
+      {
+        "name": "immutably",
+        "type": "bool"
+      }
+    ],
+    "name": "setDataUint",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "name": "http",
+        "type": "string"
+      }
+    ],
+    "name": "setCanonicalHttp",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "bytes20"
+      },
+      {
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "transferFundsInternally",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "catalogue",
+    "outputs": [
+      {
+        "name": "ipfsHash",
+        "type": "string"
+      },
+      {
+        "name": "http",
+        "type": "string"
+      },
+      {
+        "name": "owner",
+        "type": "bytes20"
+      },
+      {
+        "name": "beneficiary",
+        "type": "address"
+      },
+      {
+        "name": "timePublished",
+        "type": "uint64"
+      },
+      {
+        "name": "totalShares",
+        "type": "uint256"
+      },
+      {
+        "name": "initialPrice",
+        "type": "uint256"
+      },
+      {
+        "name": "pOwner",
+        "type": "uint256"
+      },
+      {
+        "name": "pBeneficiary",
+        "type": "uint256"
+      },
+      {
+        "name": "limitConstant",
+        "type": "uint256"
+      },
+      {
+        "name": "valuation",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "encountered",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      }
+    ],
+    "name": "assetExists",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_time",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "name": "value",
+        "type": "bool"
+      },
+      {
+        "name": "asUser",
+        "type": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "bool"
+      },
+      {
+        "name": "immutably",
+        "type": "bool"
+      }
+    ],
+    "name": "setDataBool",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "ipfsHash",
+        "type": "string"
+      },
+      {
+        "name": "username",
+        "type": "bytes20"
+      }
+    ],
+    "name": "deriveAssetSignature",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      }
+    ],
+    "name": "getLinkedAddress",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "addr",
+        "type": "address"
+      }
+    ],
+    "name": "addressIsLinked",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_string",
+    "outputs": [
+      {
+        "name": "",
+        "type": "string"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "signature",
+        "type": "bytes20"
+      }
+    ],
+    "name": "getMaxBuyPrice",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "name": "value",
+        "type": "string"
+      },
+      {
+        "name": "asUser",
+        "type": "bool"
+      },
+      {
+        "name": "timestamp",
+        "type": "bool"
+      },
+      {
+        "name": "immutably",
+        "type": "bool"
+      }
+    ],
+    "name": "setDataString",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [],
+    "name": "depositToSelf",
+    "outputs": [],
+    "payable": true,
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      }
+    ],
+    "name": "accountExists",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "accounts",
+    "outputs": [
+      {
+        "name": "owner",
+        "type": "address"
+      },
+      {
+        "name": "recovery",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_immutable",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "_bytes",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      }
+    ],
+    "name": "recover",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "name": "identity",
+        "type": "bytes20"
+      }
+    ],
+    "name": "deriveLinkedDataKey",
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      },
+      {
+        "name": "recovery",
+        "type": "address"
+      }
+    ],
+    "name": "createAccount",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      },
+      {
+        "name": "recovery",
+        "type": "address"
+      }
+    ],
+    "name": "setRecoveryAddress",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "balances",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "username",
+        "type": "bytes20"
+      }
+    ],
+    "name": "getRecoveryAddress",
+    "outputs": [
+      {
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "constant": false,
+    "inputs": [
+      {
+        "name": "ipfsHash",
+        "type": "string"
+      },
+      {
+        "name": "http",
+        "type": "string"
+      },
+      {
+        "name": "totalShares",
+        "type": "uint256"
+      },
+      {
+        "name": "initialPrice",
+        "type": "uint256"
+      },
+      {
+        "name": "beneficiary",
+        "type": "address"
+      },
+      {
+        "name": "pOwner",
+        "type": "uint256"
+      },
+      {
+        "name": "pBeneficiary",
+        "type": "uint256"
+      },
+      {
+        "name": "limitConstant",
+        "type": "uint256"
+      },
+      {
+        "name": "icoStart",
+        "type": "uint64"
+      }
+    ],
+    "name": "createAsset",
+    "outputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "constant": true,
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes20"
+      }
+    ],
+    "name": "calendar",
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64"
+      }
+    ],
+    "payable": false,
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "payable": false,
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "owner",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "beneficiary",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "ipfsHash",
+        "type": "string"
+      },
+      {
+        "indexed": false,
+        "name": "icoStart",
+        "type": "uint64"
+      }
+    ],
+    "name": "AssetRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "HttpModRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "username",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "oldAddress",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "name": "newAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "recovery",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "DirRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "seller",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "oldAsk",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "newAsk",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "AskModRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "beneficiary",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "secondary",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "BenPayoutRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "name": "shares",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "newAsk",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "weiSent",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "toSeller",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "toOwner",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "toBeneficiary",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "profit",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "buyer",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "seller",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "owner",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "beneficiary",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "TxRecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "to",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "from",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "foreign",
+        "type": "bool"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "BalIORecord",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "signature",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "IcoTargetReached",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "key",
+        "type": "bytes20"
+      },
+      {
+        "indexed": true,
+        "name": "identity",
+        "type": "bytes20"
+      },
+      {
+        "indexed": false,
+        "name": "dataType",
+        "type": "uint8"
+      },
+      {
+        "indexed": false,
+        "name": "time",
+        "type": "uint64"
+      }
+    ],
+    "name": "SetData",
+    "type": "event"
+  }
+]
