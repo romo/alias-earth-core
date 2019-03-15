@@ -40,6 +40,8 @@ const DEFAULTS = {
 	}
 };
 
+const SUPPORTED_NETWORKS = ['main', 'rinkeby', 'kovan', 'ropsten'];
+
 const NETWORK_CODES = {
 	'1': { key: 'main', label: 'Main Ethereum Network' },
 	'3': { key: 'ropsten', label: 'Ropsten Test Network' },
@@ -89,11 +91,10 @@ const _tx = async (provider, tx, event) => {
 				event({ name: 'timeout' });
 			} else {
 				check += 1;
-				try {
+				try { // Silently catch network errors on interval
 					const web3 = new Web3(provider);
 					const receipt = await web3.eth.getTransactionReceipt(hash);
 					if (receipt && receipt.blockNumber) { // Transaction mined
-						console.log('-----receipt', receipt);
 						clearInterval(checkConfirmed);
 						event({
 							name: receipt.status ? 'confirmed' : 'failed',
@@ -167,75 +168,10 @@ const getSigningAddress = ({ data, sig }) => {
   return bufferToHex(signedBy);
 }
 
-const getContractInstance = async ({ network, contract, provider }) => { // Return web3 contract instance
-
-	const _provider = provider || DEFAULTS.provider[network];
-	const web3 = new Web3(_provider);
-	let instance;
-
-	if (network === 'main' || network === 'rinkeby') { // Public network
-
-		const address = CONTRACT.address[network];
-		instance = await new web3.eth.Contract( // Load contract from address
-			abi, // Interface
-			address // Contract address
-		);
-
-	} else if (network === 'local') { // Testing / dev
-		if (!contract) {
-			throw Error(`For local deployments you must pass an existing contract instance as 'contract' in options`);
-		}
-		instance = contract; // Locally deployed contract passed in options
-	} else {
-		throw Error(`For the network option, please specify 'main', 'rinkeby', or 'local' (for dev)`);
-	}
-
-	return instance; // Return the contract instance
-}
-
 class AliasEarth {
 
 	constructor() { // Nothing to see here
 	}
-
-	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	/* Export Constants */
-
-  static constants() {
-    return {
-      CONTRACT,
-      DEFAULTS,
-      NETWORK_CODES
-    };
-  }
-
-
-	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	/* Export General Logic */
-
-	static utf8ToBytes20(utf8) { return utf8ToBytes20(utf8); }
-
-	static utf8ByteLength(utf8) { return utf8ByteLength(utf8); }
-
-	static isAliasBytes20(alias) { return isAliasBytes20(alias); }
-
-	static isSameAddress(a, b) { return isSameAddress(a, b); }
-
-	static packTypedData(data) { return packTypedData(data); }
-
-	static signData(params) { return signData(params); }
-
-	static getSigningAddress(params) { return getSigningAddress(params); }
-
-	static async getContractInstance(options) { return await getContractInstance(options); }
-
-	static async _op(f, resolve) { return _op(f, resolve); }
-
-	static async _tx(f, event) { return _tx(f, event); }
-
-
-	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	/* Async Instance API */
 
 	async init(options, resolve) {
 		return _op(async () => {
@@ -248,7 +184,6 @@ class AliasEarth {
 					this.options.provider = window.ethereum;
 					if (!options.network) { // Network not specified
 						const version = await window.ethereum.networkVersion;
-						console.log('_network', NETWORK_CODES[version]);
 						this.options.network = version ? NETWORK_CODES[version].key : DEFAULTS.network;
 					}
 					
@@ -275,43 +210,8 @@ class AliasEarth {
 		}, resolve);
 	}
 
-	async deposit({ toAlias, fromAddress, amount }, resolve) {
-
-		// TODO apply _op => _tx pattern
-
-		let _fromAddress;
-		let _from
-
-		if (!amount) {
-			throw Error('Please specify the amount of wei that you want to deposit');
-		}
-
-		if (typeof amount !== 'string') {
-			throw Error('Please specify \'amount\' as a string to avoid accuracy errors');
-		}
-
-		if (!bigInt(amount).gt('0')) {
-			throw Error('\'amount\' must be a positive integer');
-		}
-
-		if (!fromAddress) { // No sender specified
-			_fromAddress = await this.getActiveAddress();
-		}
-
-		await this.contract.methods.depositToAccount(utf8ToBytes20(toAlias)).send({
-			from: _fromAddress,
-			value: amount
-		});
-
-	}
-
-	async transfer() {
-		// TODO
-	}
-
-	async withdraw() {
-		// TODO 
-	}
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Write Blockchain Data */
 
 	async createAlias({ alias, linked, recovery }, event, resolve) {
 		return _op(async () => {
@@ -328,13 +228,199 @@ class AliasEarth {
 				throw Error('Must provide managing address');
 			}
 
-			await _tx(this.options.provider, this.contract.methods.createAccount(
+			_tx(this.options.provider, this.contract.methods.createAccount(
 				utf8ToBytes20(alias),
 				recovery
 			).send({ from: linked }), event);
 
+			return { alias, linked, recovery };
 		}, resolve);
 	}
+
+	async setLinkedAddress({ alias, newLinked }, event, resolve) {
+		// TODO change the linked address of an alias
+	}
+
+	async setRecoveryAddress({ alias, recovery }, event, resolve) {
+		// TODO set a new recovery address
+	}
+
+	async recover({ alias }) {
+		// TODO call recover
+	}
+
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Read Blockchain Data */
+
+	async isAliasAvailable(alias, resolve) {
+		return _op(async () => {
+
+			if (!alias) {
+				throw Error('Must provide alias');
+			}
+
+			const exists = await this.contract.methods.accountExists(
+				utf8ToBytes20(alias)
+			).call();
+
+			return !exists;
+		}, resolve);
+	}
+
+	async isAddressAvailable(address, resolve) {
+		return _op(async () => {
+			const encountered = await this.contract.methods.encountered(address).call();
+			return !encountered;
+		}, resolve);
+	}
+
+	async getAliasFromAddress(address, resolve) {
+		return _op(async () => {
+
+			if (!address) {
+				throw Error('Must specify address');
+			}
+
+			const hex = await this.contract.methods.directory(address).call();
+			return hexToString(hex);
+		});
+	}
+
+	async getAddressFromAlias(alias, resolve) {
+		return _op(async () => {
+
+			if (!alias) {
+				throw Error('Must specify alias');
+			}
+
+			return await this.contract.methods.directory(alias).call();
+		}, resolve);
+	}
+
+	async getBalances(identity, resolve) {
+		return _op(async () => {
+
+			const _identity = identity || await this.getActiveAddress();
+			const balance = {};
+			let alias = '';
+			let address = '';
+			
+			if (isAddress(_identity)) { // Passed address
+				address = _identity;
+				const aliasHex = await this.contract.methods.directory(address).call();
+				alias = hexToString(aliasHex);
+			} else { // Passed alias
+				alias = _identity;
+				address = await this.contract.methods.getLinkedAddress(utf8ToBytes20(alias)).call();
+			}
+
+			if (alias) {
+				balance.alias = await this.contract.methods.balances(utf8ToBytes20(alias)).call();
+			}
+
+			if (address) {
+				const web3 = new Web3(this.options.provider);
+				balance.address = await web3.eth.getBalance(address);
+			}
+
+			return { alias, address, balance };
+		});
+	}
+
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Read Log Data */
+
+	// KEEP working... read logs!
+
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Funds API */
+
+	async deposit({ toAlias, fromAddress, amount }, event, resolve) {
+		return _op(async () => {
+			let _fromAddress;
+			let _fromAlias;
+
+			if (fromAddress) { // Explicit sender address
+				_fromAddress = fromAddress;
+			} else { // Autodetect
+				_fromAddress = await this.getActiveAddress();
+			}
+
+			if (!_fromAddress) {
+				throw Error('\'fromAddress\' was not specified and could not be auto-detected from MetaMask');
+			}
+
+			if (!amount) {
+				throw Error('Please specify the amount of wei that you want to deposit');
+			}
+
+			if (typeof amount !== 'string') {
+				throw Error('Please specify \'amount\' as a string to avoid accuracy errors');
+			}
+
+			if (!bigInt(amount).gt('0')) {
+				throw Error('\'amount\' must be a positive integer');
+			}
+
+			_fromAlias = await this.contract.methods.directory(_fromAddress).call();
+			if (_fromAlias === toAlias) { // Deposit to own alias
+				_tx(this.options.provider, this.contract.methods.depositToSelf().send({
+					from: _fromAddress,
+					value: amount
+				}), event);
+			} else { // Deposit to another alias
+				_tx(this.options.provider, this.contract.methods.depositToAccount(
+					utf8ToBytes20(toAlias)
+				).send({
+					from: _fromAddress,
+					value: amount
+				}), event);
+			}
+
+			return { toAlias, fromAlias: _fromAlias, fromAddress, amount };
+		}, resolve);
+	}
+
+	async transfer() {
+		// TODO transfer ether internally
+	}
+
+	async withdraw({ amount, toAddress }, event, resolve) {
+		return _op(async () => {
+			let _toAddress;
+
+			if (toAddress) { // Explicit sender address
+				_toAddress = toAddress;
+			} else { // Autodetect
+				_toAddress = await this.getActiveAddress();
+			}
+
+			if (!_toAddress) {
+				throw Error('\'toAddress\' was not specified and could not be auto-detected from MetaMask');
+			}
+
+			if (!amount) {
+				throw Error('Please specify the amount of wei that you want to withdraw');
+			}
+
+			if (typeof amount !== 'string') {
+				throw Error('Please specify \'amount\' as a string to avoid accuracy errors');
+			}
+
+			if (!bigInt(amount).gt('0')) {
+				throw Error('\'amount\' must be a positive integer');
+			}
+
+			_tx(this.options.provider, this.contract.methods.withdrawFunds(
+				amount // amount in wei	
+			).send({ from: _toAddress }), event);
+
+			return { toAddress, initialBal, amount };
+		}, resolve);
+	}
+
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Signatures and Auth */
 
 	async signDataWithMetaMask(data, resolve) {
 		return _op(async () => {
@@ -366,7 +452,7 @@ class AliasEarth {
 
 			try {
 				const signed = await this.signDataWithMetaMask({
-					'🔑': alias,
+					'👤': alias,
 					'🔐': app,
 					'⏱️': exp
 				});
@@ -413,7 +499,7 @@ class AliasEarth {
 
 			// Pack data how it would have been signed on the client
 			const data = packTypedData({
-				'🔑': _alias,
+				'👤': _alias,
 				'🔐': _app,
 				'⏱️': _exp
 			});
@@ -445,27 +531,8 @@ class AliasEarth {
 		}, resolve);
 	}
 
-	async isAliasAvailable(alias, resolve) {
-		return _op(async () => {
-
-			if (!alias) {
-				throw Error('Must provide alias');
-			}
-
-			const exists = await this.contract.methods.accountExists(
-				utf8ToBytes20(alias)
-			).call();
-
-			return !exists;
-		}, resolve);
-	}
-
-	async isAddressAvailable(address, resolve) {
-		return _op(async () => {
-			const encountered = await this.contract.methods.encountered(address).call();
-			return !encountered;
-		}, resolve);
-	}
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Environmental Helpers */
 
 	async getActiveAddress(resolve) {
 		return _op(async () => {
@@ -482,37 +549,55 @@ class AliasEarth {
 			return hexToString(hex);
 		}, resolve);
 	}
-
-	async getBalances(identity, resolve) {
-		return _op(async () => {
-
-			const _identity = identity || await this.getActiveAddress();
-			const balance = {};
-			let alias = '';
-			let address = '';
-			
-			if (isAddress(_identity)) { // Passed address
-				address = _identity;
-				const aliasHex = await this.contract.methods.directory(address).call();
-				alias = hexToString(aliasHex);
-			} else { // Passed alias
-				alias = _identity;
-				address = await this.contract.methods.getLinkedAddress(utf8ToBytes20(alias)).call();
-			}
-
-			if (alias) {
-				balance.alias = await this.contract.methods.balances(utf8ToBytes20(alias)).call();
-			}
-
-			if (address) {
-				const web3 = new Web3(this.options.provider);
-				balance.address = await web3.eth.getBalance(address);
-			}
-
-			return { alias, address, balance };
-		});
-	}
 }
 
-//export default AliasEarth;
-module.exports = AliasEarth;
+const getContractInstance = async ({ network, provider }) => { // Return web3 contract instance
+
+	const _provider = provider || DEFAULTS.provider[network];
+	const web3 = new Web3(_provider);
+	let instance;
+
+	if (SUPPORTED_NETWORKS.indexOf(network) !== -1) { // Public network
+
+		const address = CONTRACT.address[network];
+		instance = await new web3.eth.Contract( // Load contract from address
+			abi, // Interface
+			address // Contract address
+		);
+
+	} else {
+		throw Error(`For the network option, please specify 'main', 'rinkeby', 'kovan', or 'ropsten'`);
+	}
+
+	return instance; // Return the contract instance
+}
+
+const connect = async ({ network }, resolve) => {
+	return _op(async () => {
+		const instance = new AliasEarth();
+		await instance.init({ network });
+		return instance;
+	}, resolve);
+};
+
+//module.exports = AliasEarth;
+module.exports = {
+	connect, // Get high level api
+	getContractInstance, // Get just the contract object
+	constants: {
+		CONTRACT,
+		DEFAULTS,
+		SUPPORTED_NETWORKS,
+		NETWORK_CODES
+	},
+	utils: {
+		utf8ToBytes20,
+		utf8ByteLength,
+		isAliasBytes20,
+		isSameAddress,
+		packTypedData,
+		signData,
+		getSigningAddress,
+		getContractInstance
+	}
+};
