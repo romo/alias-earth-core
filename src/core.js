@@ -29,6 +29,10 @@ const CONTRACT = {
 	address: {
 		main: '0x8F6A7781F54335D10d02bDD9ce66ACE1647AbCA7',
 		rinkeby: '0x731C54d14d853af7f6CB587c680Efc1db11a3757'
+	},
+	deployed: { // Block in which contract was deployed
+		main: 7199557,
+		rinkeby: 3754313
 	}
 };
 
@@ -57,23 +61,28 @@ const _isBrowser = () => {
 	return typeof window !== 'undefined';
 };
 
-const _ensureMetaMask = async () => {
-	if (_isBrowser()) {
+const _ensureMetaMask = async (required) => {
+	if (required && _isBrowser()) {
 		await window.ethereum.enable();
 	}
 };
 
-const _op = async (f, resolve) => { // Callbackify async ops
+const _op = async (f, resolve, options) => { // Callbackify async ops
+	const defaults = { ensureMetaMask: false };
+	const _options = options ? {
+		...defaults,
+		...options
+	} : defaults;
 	if (resolve) {
 		try {
-			await _ensureMetaMask();
+			await _ensureMetaMask(_options.ensureMetaMask);
 			const res = await f();
 			resolve(null, res);
 		} catch (err) {
 			resolve(err);
 		}
 	} else {
-		await _ensureMetaMask();
+		await _ensureMetaMask(_options.ensureMetaMask);
 		return f();
 	}
 };
@@ -168,6 +177,43 @@ const getSigningAddress = ({ data, sig }) => {
   return bufferToHex(signedBy);
 }
 
+const parseLogs = (logs) => {
+	const parser = {
+		BalIORecord: data => {
+			const toAlias = hexToString(data[0]);
+			const fromAlias = hexToString(data[1]);
+
+			console.log('----data', data);
+
+			return {
+				event: toAlias ? 'deposit' : 'withdrawal',
+				data: toAlias ? {
+					toAlias,
+					fromAlias,
+					amount: data[2]
+				} : {
+					alias: fromAlias,
+					amount: data[2]
+				}
+			};
+		},
+		DirRecord: data => {
+			return null;
+		},
+		SetData: data => { return null; } // TODO not implemented
+	};
+	return logs.map(item => {
+		const { event, returnValues, blockNumber, transactionHash, id } = item;
+		return parser[event] ? {
+			...parser[event](returnValues),
+			timestamp: parseInt(returnValues.time),
+			transactionHash,
+			blockNumber,
+			id
+		} : null;
+	});
+};
+
 class AliasEarth {
 
 	constructor() { // Nothing to see here
@@ -234,7 +280,7 @@ class AliasEarth {
 			).send({ from: linked }), event);
 
 			return { alias, linked, recovery };
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
 	async setLinkedAddress({ alias, newLinked }, event, resolve) {
@@ -332,6 +378,90 @@ class AliasEarth {
 
 	// KEEP working... read logs!
 
+	async getLogs({ event, filter, fromBlock, toBlock }, resolve) {
+		return _op(async () => {
+
+			const { network } = this.options;
+			const _fromBlock = !fromBlock || fromBlock < CONTRACT.deployed[network] ? CONTRACT.deployed[network] : fromBlock;
+			const _toBlock = toBlock || 'latest';
+
+			if (!(event === 'BalIORecord' || event === 'DirRecord' || event === 'SetData')) {
+				throw Error('Must specify \'event\' as \'BalIORecord\', \'DirRecord\', or \'SetData\'');
+			}
+
+			const logs = await this.contract.getPastEvents(event, {
+				fromBlock: _fromBlock,
+    		toBlock: _toBlock,
+    		filter
+			});
+
+			return parseLogs(logs);
+		}, resolve);
+	};
+
+	getExternalDeposits({ toAlias, fromAlias, fromBlock, toBlock }, resolve) {
+		return _op(async () => {
+
+			if (!(toAlias || fromAlias)) {
+				throw Error('Please specify \'toAlias\' and/or \'fromAlias\'');
+			}
+
+			const filter = {};
+
+			if (toAlias) {
+				filter.to = utf8ToBytes20(toAlias);
+			}
+
+			if (fromAlias) {
+				filter.from = utf8ToBytes20(fromAlias);
+			}
+
+			const data = await this.getLogs({
+				event: 'BalIORecord',
+				filter,
+				fromBlock,
+				toBlock
+			});
+
+			return data.filter(item => {
+				return item.event === 'deposit' && item.data.toAlias === item.data.fromAlias;
+			});
+		}, resolve);
+	}
+
+	getDepositsWithdrawals({ alias, selfOnly, fromBlock, toBlock }, resolve) {
+		return _op(async () => {
+
+			if (!alias) {
+				throw Error('Please specify \'alias\'');
+			}
+
+			const hex = utf8ToBytes20(alias);
+			const filter = { to: [utf8ToBytes20(''), hex] };
+			if (selfOnly) {
+				filter.from = hex;
+			}
+
+			const data = await this.getLogs({
+				event: 'BalIORecord',
+				fromBlock,
+				toBlock,
+				filter
+			});
+
+			return data;
+		}, resolve);
+	}
+
+	getNewAliasLog({ fromBlock, toBlock }, resolve) {
+		// TODO return logs of all aliases that were created
+	}
+
+	getAliasEventLog({ alias, fromBlock, toBlock }) {
+		// TODO return changeLinkedAddress and recover events
+		// for one specific alias
+	}
+
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Funds API */
 
@@ -378,12 +508,12 @@ class AliasEarth {
 			}
 
 			return { toAlias, fromAlias: _fromAlias, fromAddress, amount };
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
-	async transfer() {
-		// TODO transfer ether internally
-	}
+	// async transfer() {
+	// 	// TODO transfer ether internally
+	// }
 
 	async withdraw({ amount, toAddress }, event, resolve) {
 		return _op(async () => {
@@ -416,7 +546,7 @@ class AliasEarth {
 			).send({ from: _toAddress }), event);
 
 			return { toAddress, initialBal, amount };
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -429,7 +559,7 @@ class AliasEarth {
 			const packed = packTypedData(data);
 			const sig = await eth.signTypedData(packed, signer);
 			return { data: packed, sig };
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
 	async signAuthParams({ app, exp }, resolve) {
@@ -462,7 +592,7 @@ class AliasEarth {
 			}
 
 			return `_alias=${encodeURIComponent(alias)}&_app=${encodeURIComponent(app)}&_exp=${exp}&_sig=${sig}`;
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
 	async verifyAuthParams({ _alias, _app, _exp, _sig }, { app, maxSession, getCached }, resolve) {
@@ -539,7 +669,7 @@ class AliasEarth {
 			const web3 = new Web3(this.options.provider);
 			const accounts = await web3.eth.getAccounts();
 			return accounts[0];
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 
 	async getActiveAlias(resolve) {
@@ -547,29 +677,30 @@ class AliasEarth {
 			const address = await this.getActiveAddress();
 			const hex = await this.contract.methods.directory(address).call();
 			return hexToString(hex);
-		}, resolve);
+		}, resolve, { ensureMetaMask: true });
 	}
 }
 
-const getContractInstance = async ({ network, provider }) => { // Return web3 contract instance
+const getContractInstance = async ({ network, provider }, resolve) => { // Return web3 contract instance
+	return _op(async () => {
+		const _provider = provider || DEFAULTS.provider[network];
+		const web3 = new Web3(_provider);
+		let instance;
 
-	const _provider = provider || DEFAULTS.provider[network];
-	const web3 = new Web3(_provider);
-	let instance;
+		if (SUPPORTED_NETWORKS.indexOf(network) !== -1) { // Public network
 
-	if (SUPPORTED_NETWORKS.indexOf(network) !== -1) { // Public network
+			const address = CONTRACT.address[network];
+			instance = await new web3.eth.Contract( // Load contract from address
+				abi, // Interface
+				address // Contract address
+			);
 
-		const address = CONTRACT.address[network];
-		instance = await new web3.eth.Contract( // Load contract from address
-			abi, // Interface
-			address // Contract address
-		);
+		} else {
+			throw Error(`For the network option, please specify 'main', 'rinkeby', 'kovan', or 'ropsten'`);
+		}
 
-	} else {
-		throw Error(`For the network option, please specify 'main', 'rinkeby', 'kovan', or 'ropsten'`);
-	}
-
-	return instance; // Return the contract instance
+		return instance; // Return the contract instance
+	}, resolve);
 }
 
 const connect = async ({ network }, resolve) => {
@@ -598,6 +729,6 @@ module.exports = {
 		packTypedData,
 		signData,
 		getSigningAddress,
-		getContractInstance
+		parseLogs
 	}
 };
