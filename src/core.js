@@ -37,7 +37,7 @@ const CONTRACT = {
 };
 
 const DEFAULTS = {
-	network: 'main',
+	updateOnNetworkChange: true,
 	provider: {
 		main: 'https://mainnet.infura.io/v3/1f0678a9617c4c7aa6896fd667aaa88c',
 		rinkeby: 'https://rinkeby.infura.io/v3/1f0678a9617c4c7aa6896fd667aaa88c'
@@ -47,11 +47,13 @@ const DEFAULTS = {
 const SUPPORTED_NETWORKS = ['main', 'rinkeby', 'kovan', 'ropsten'];
 
 const NETWORK_CODES = {
-	'1': { key: 'main', label: 'Main Ethereum Network' },
-	'3': { key: 'ropsten', label: 'Ropsten Test Network' },
-	'42': { key: 'kovan', label: 'Kovan Test Network' },
-	'4': { key: 'rinkeby', label: 'Rinkeby Test Network' }
+	'1': 'main',
+	'3': 'ropsten',
+	'42': 'kovan',
+	'4': 'rinkeby'
 };
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -88,11 +90,9 @@ const _op = async (f, resolve, options) => { // Callbackify async ops
 };
 
 const _tx = async (provider, tx, event) => {
-
 	let checkConfirmed; // Interval to manually check confirmation
 	let check = 0; // Number of times confirmation checked
 	let limit = 10; // Max number of times to check confirmation
-
 	tx.on('transactionHash', (hash) => {
 		checkConfirmed = setInterval(async () => {
 			if (check > limit) {
@@ -177,16 +177,27 @@ const getSigningAddress = ({ data, sig }) => {
   return bufferToHex(signedBy);
 }
 
+const getFiatConversionRates = async () => {
+	const res = await axios.get('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD,DKK,JPY,PLN,AUD,EUR,KRW,RUB,BRL,GBP,MXN,SEK,CAD,HKD,MYR,SGD,CHF,HUF,NOK,THB,CLP,IDR,NZD,TRY,CNY,ILS,PHP,TWD,CZK,INR,PKR,ZAR');
+	return res.data;
+};
+
+const getActiveNetwork = () => {
+	let network = null;
+	if (_isBrowser() && window.ethereum) {
+		const { networkVersion } = window.ethereum;
+		network = NETWORK_CODES[networkVersion];
+	}
+	return network;
+};
+
 const parseLogs = (logs) => {
 	const parser = {
 		BalIORecord: data => {
 			const toAlias = hexToString(data[0]);
 			const fromAlias = hexToString(data[1]);
-
-			console.log('----data', data);
-
 			return {
-				event: toAlias ? 'deposit' : 'withdrawal',
+				event: data[3] ? (toAlias ? 'deposit' : 'withdrawal') : 'transfer',
 				data: toAlias ? {
 					toAlias,
 					fromAlias,
@@ -198,21 +209,40 @@ const parseLogs = (logs) => {
 			};
 		},
 		DirRecord: data => {
-			return null;
+			const creation = data[1] === ZERO_ADDRESS;
+			const alias = hexToString(data[0]);
+			return {
+				event: creation ? 'create_alias' : (data[3] ? 'change_address' : 'recover'),
+				data: creation ? {
+					alias,
+					address: data[2]
+				} : {
+					alias,
+					oldAddress: data[1],
+					newAddress: data[2]  
+				}
+			};
 		},
-		SetData: data => { return null; } // TODO not implemented
+		SetData: data => {
+			return null; // TODO not implemented
+		}
 	};
 	return logs.map(item => {
-		const { event, returnValues, blockNumber, transactionHash, id } = item;
+		const { event, returnValues, blockNumber, transactionHash, transactionIndex, id } = item;
 		return parser[event] ? {
 			...parser[event](returnValues),
 			timestamp: parseInt(returnValues.time),
+			transactionIndex,
 			transactionHash,
 			blockNumber,
 			id
 		} : null;
 	});
 };
+
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+/* API Instance */
 
 class AliasEarth {
 
@@ -221,18 +251,18 @@ class AliasEarth {
 
 	async init(options, resolve) {
 		return _op(async () => {
-
 			this.options = options ? { ...DEFAULTS, ...options } : DEFAULTS;
-
 			if (_isBrowser()) { // In browser
 				if (window.ethereum) { // Provider detected
-
 					this.options.provider = window.ethereum;
-					if (!options.network) { // Network not specified
-						const version = await window.ethereum.networkVersion;
-						this.options.network = version ? NETWORK_CODES[version].key : DEFAULTS.network;
+					if (!this.options.network) { // Network not specified
+						this.options.network = getActiveNetwork();
 					}
-					
+					if (this.options.updateOnNetworkChange) {
+						this.options.provider.on('networkChanged', (code) => {
+							this.options.network = NETWORK_CODES[code]
+						});
+					}
 				} else { // No injected provider
 					// TODO Prompt user to install MetaMask
 				}
@@ -252,8 +282,11 @@ class AliasEarth {
 				...this.options,
 				provider: this.options.provider
 			});
-
 		}, resolve);
+	}
+
+	config() {
+		return this.options;
 	}
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -276,23 +309,96 @@ class AliasEarth {
 
 			_tx(this.options.provider, this.contract.methods.createAccount(
 				utf8ToBytes20(alias),
-				recovery
+				recovery ? recovery : ZERO_ADDRESS
 			).send({ from: linked }), event);
-
-			return { alias, linked, recovery };
-		}, resolve, { ensureMetaMask: true });
+		}, resolve);
 	}
 
-	async setLinkedAddress({ alias, newLinked }, event, resolve) {
-		// TODO change the linked address of an alias
+	async setLinkedAddress({ alias, newLinked, from }, event, resolve) {
+		return _op(async () => {
+
+			let _from;
+			if (!from) {
+				_from = await this.getActiveAddress();
+			}
+
+			if (!alias) {
+				throw Error('Must provide alias');
+			}
+
+			if (!newLinked) {
+				throw Error('Must provide \'newLinked\'');
+			}
+
+			if (!isAddress(newLinked)) {
+				throw Error('\'newLinked\' is not a valid Ethereum address');
+			}
+
+			if (!_from) {
+				throw Error('Failed to detect sender address, please specify \'from\'');
+			}
+
+			_tx(this.options.provider, this.contract.methods.changeLinkedAddress(
+				utf8ToBytes20(alias),
+				newLinked
+			).send({ from: _from }), event);
+		}, resolve);
 	}
 
-	async setRecoveryAddress({ alias, recovery }, event, resolve) {
-		// TODO set a new recovery address
+	async setRecoveryAddress({ alias, recovery, from }, event, resolve) {
+		_op(async () => {
+
+			let _from;
+			if (!from) {
+				_from = await this.getActiveAddress();
+			}
+
+			if (!alias) {
+				throw Error('Must provide alias');
+			}
+
+			if (!recovery) {
+				throw Error('Must provide recovery');
+			}
+
+			if (!isAddress(recovery)) {
+				throw Error('\'recovery\' is not a valid Ethereum address');
+			}
+ 
+			if (!_from) {
+				throw Error('Failed to detect sender address, please specify \'from\'');
+			}
+
+			_tx(this.options.provider, this.contract.methods.setRecoveryAddress(
+				utf8ToBytes20(alias),
+				recovery
+			).send({ from: _from }), event);
+		}, resolve);
 	}
 
-	async recover({ alias }) {
-		// TODO call recover
+	async recover({ alias, recovery }, event, resolve) {
+		_op(async () => {
+
+			if (!alias) {
+				throw Error('Must provide alias');
+			}
+
+			if (!recovery) {
+				throw Error('Must provide recovery');
+			}
+
+			if (!isAddress(recovery)) {
+				throw Error('\'recovery\' is not a valid Ethereum address');
+			}
+ 
+			if (!_from) {
+				throw Error('Failed to detect sender address, please specify \'from\'');
+			}
+
+			_tx(this.options.provider, this.contract.methods.setRecoveryAddress(
+				utf8ToBytes20(alias)
+			).send({ from: recovery }), event);
+		}, resolve);
 	}
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -376,14 +482,16 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Read Log Data */
 
-	// KEEP working... read logs!
-
 	async getLogs({ event, filter, fromBlock, toBlock }, resolve) {
 		return _op(async () => {
 
 			const { network } = this.options;
 			const _fromBlock = !fromBlock || fromBlock < CONTRACT.deployed[network] ? CONTRACT.deployed[network] : fromBlock;
 			const _toBlock = toBlock || 'latest';
+
+			console.log('---fromBlock', _fromBlock);
+			console.log('---toBlock', _toBlock);
+			console.log('---filter', filter);
 
 			if (!(event === 'BalIORecord' || event === 'DirRecord' || event === 'SetData')) {
 				throw Error('Must specify \'event\' as \'BalIORecord\', \'DirRecord\', or \'SetData\'');
@@ -399,7 +507,7 @@ class AliasEarth {
 		}, resolve);
 	};
 
-	getExternalDeposits({ toAlias, fromAlias, fromBlock, toBlock }, resolve) {
+	getDeposits({ toAlias, fromAlias, fromBlock, toBlock }, resolve) {
 		return _op(async () => {
 
 			if (!(toAlias || fromAlias)) {
@@ -424,12 +532,12 @@ class AliasEarth {
 			});
 
 			return data.filter(item => {
-				return item.event === 'deposit' && item.data.toAlias === item.data.fromAlias;
+				return item.event === 'deposit';
 			});
 		}, resolve);
 	}
 
-	getDepositsWithdrawals({ alias, selfOnly, fromBlock, toBlock }, resolve) {
+	getBalanceActivity({ alias, selfOnly, fromBlock, toBlock }, resolve) {
 		return _op(async () => {
 
 			if (!alias) {
@@ -453,13 +561,37 @@ class AliasEarth {
 		}, resolve);
 	}
 
-	getNewAliasLog({ fromBlock, toBlock }, resolve) {
-		// TODO return logs of all aliases that were created
+	getNewAliasLog(options, resolve) {
+		return _op(async () => {
+			const _options = options || {};
+			const { fromBlock, toBlock } = _options;
+			const data = await this.getLogs({
+				event: 'DirRecord',
+				fromBlock,
+				toBlock
+			});
+			return data.filter(item => {
+				return item.event === 'create_alias';
+			});
+		}, resolve);
 	}
 
-	getAliasEventLog({ alias, fromBlock, toBlock }) {
-		// TODO return changeLinkedAddress and recover events
-		// for one specific alias
+	getAliasEventLog({ alias, fromBlock, toBlock }, resolve) {
+		return _op(async () => {
+
+			if (!alias) {
+				throw Error('Please specify \'alias\'');
+			}
+
+			const data = await this.getLogs({
+				event: 'DirRecord',
+				filter: { username: utf8ToBytes20(alias) },
+				fromBlock,
+				toBlock
+			});
+
+			return data;
+		}, resolve);
 	}
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -506,14 +638,8 @@ class AliasEarth {
 					value: amount
 				}), event);
 			}
-
-			return { toAlias, fromAlias: _fromAlias, fromAddress, amount };
-		}, resolve, { ensureMetaMask: true });
+		}, resolve);
 	}
-
-	// async transfer() {
-	// 	// TODO transfer ether internally
-	// }
 
 	async withdraw({ amount, toAddress }, event, resolve) {
 		return _op(async () => {
@@ -544,10 +670,12 @@ class AliasEarth {
 			_tx(this.options.provider, this.contract.methods.withdrawFunds(
 				amount // amount in wei	
 			).send({ from: _toAddress }), event);
-
-			return { toAddress, initialBal, amount };
-		}, resolve, { ensureMetaMask: true });
+		}, resolve);
 	}
+
+	// async transfer() {
+	// 	// TODO transfer ether internally
+	// }
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Signatures and Auth */
@@ -582,7 +710,7 @@ class AliasEarth {
 
 			try {
 				const signed = await this.signDataWithMetaMask({
-					'👤': alias,
+					'⚫': alias,
 					'🔐': app,
 					'⏱️': exp
 				});
@@ -629,7 +757,7 @@ class AliasEarth {
 
 			// Pack data how it would have been signed on the client
 			const data = packTypedData({
-				'👤': _alias,
+				'⚫': _alias,
 				'🔐': _app,
 				'⏱️': _exp
 			});
@@ -703,18 +831,17 @@ const getContractInstance = async ({ network, provider }, resolve) => { // Retur
 	}, resolve);
 }
 
-const connect = async ({ network }, resolve) => {
+const connect = async (options, resolve) => {
 	return _op(async () => {
 		const instance = new AliasEarth();
-		await instance.init({ network });
+		await instance.init(options);
 		return instance;
 	}, resolve);
 };
 
-//module.exports = AliasEarth;
 module.exports = {
 	connect, // Get high level api
-	getContractInstance, // Get just the contract object
+	getContractInstance, // Just the contract object
 	constants: {
 		CONTRACT,
 		DEFAULTS,
@@ -729,6 +856,7 @@ module.exports = {
 		packTypedData,
 		signData,
 		getSigningAddress,
+		getActiveNetwork,
 		parseLogs
 	}
 };
