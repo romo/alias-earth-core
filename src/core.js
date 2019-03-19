@@ -97,7 +97,7 @@ const _tx = async (provider, tx, event) => {
 		checkConfirmed = setInterval(async () => {
 			if (check > limit) {
 				clearInterval(checkConfirmed);
-				event({ name: 'timeout' });
+				event({ name: 'slow' });
 			} else {
 				check += 1;
 				try { // Silently catch network errors on interval
@@ -189,6 +189,10 @@ const getActiveNetwork = () => {
 		network = NETWORK_CODES[networkVersion];
 	}
 	return network;
+};
+
+const weiToFixedEth = (wei, precision) => {
+	return parseFloat(fromWei(wei, 'ether')).toFixed(precision).toString();
 };
 
 const parseLogs = (logs) => {
@@ -625,14 +629,25 @@ class AliasEarth {
 			}
 
 			_fromAlias = await this.contract.methods.directory(_fromAddress).call();
+
+			console.log('---fromAlias', _fromAlias);
+			console.log('---toAlias', toAlias);
+
 			if (_fromAlias === toAlias) { // Deposit to own alias
+
+
+				console.log('deposit-to-self');
+
 				_tx(this.options.provider, this.contract.methods.depositToSelf().send({
 					from: _fromAddress,
 					value: amount
 				}), event);
 			} else { // Deposit to another alias
+				
+				console.log('deposit-to-account');
+
 				_tx(this.options.provider, this.contract.methods.depositToAccount(
-					utf8ToBytes20(toAlias)
+					utf8ToBytes20(/*toAlias*/'worldsfair')
 				).send({
 					from: _fromAddress,
 					value: amount
@@ -856,7 +871,9 @@ module.exports = {
 		packTypedData,
 		signData,
 		getSigningAddress,
+		getFiatConversionRates,
 		getActiveNetwork,
+		weiToFixedEth,
 		parseLogs
 	}
 };
