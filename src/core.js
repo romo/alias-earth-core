@@ -244,6 +244,13 @@ const parseLogs = (logs) => {
 	});
 };
 
+const encodeParams = (data) => {
+	return Object.keys(data).map(k => {
+		const v = data[k];
+		return `${k}=${encodeURIComponent(v)}`;
+	}).join('&');
+};
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* API Instance */
@@ -605,6 +612,7 @@ class AliasEarth {
 		return _op(async () => {
 			let _fromAddress;
 			let _fromAlias;
+			let _toAlias;
 
 			if (fromAddress) { // Explicit sender address
 				_fromAddress = fromAddress;
@@ -629,25 +637,19 @@ class AliasEarth {
 			}
 
 			_fromAlias = await this.contract.methods.directory(_fromAddress).call();
+			_toAlias = utf8ToBytes20(toAlias);
 
-			console.log('---fromAlias', _fromAlias);
-			console.log('---toAlias', toAlias);
+			//console.log('---fromAlias', hexToString(_fromAlias), _fromAlias);
+			//console.log('---toAlias', toAlias, _toAlias);
 
-			if (_fromAlias === toAlias) { // Deposit to own alias
-
-
-				console.log('deposit-to-self');
-
+			if (_fromAlias === _toAlias) { // Deposit to own alias
 				_tx(this.options.provider, this.contract.methods.depositToSelf().send({
 					from: _fromAddress,
 					value: amount
 				}), event);
 			} else { // Deposit to another alias
-				
-				console.log('deposit-to-account');
-
 				_tx(this.options.provider, this.contract.methods.depositToAccount(
-					utf8ToBytes20(/*toAlias*/'worldsfair')
+					_toAlias
 				).send({
 					from: _fromAddress,
 					value: amount
@@ -708,10 +710,10 @@ class AliasEarth {
 	async signAuthParams({ app, exp }, resolve) {
 		return _op(async () => {
 
-			const alias = await this.getActiveAlias();
-			let sig;
+			const _alias = await this.getActiveAlias();
+			let _sig;
 
-			if (!alias) {
+			if (!_alias) {
 				throw Error('The currently selected address is not associated with any alias');
 			}
 
@@ -725,16 +727,17 @@ class AliasEarth {
 
 			try {
 				const signed = await this.signDataWithMetaMask({
-					'⚫': alias,
+					'⚫': _alias,
 					'🔐': app,
 					'⏱️': exp
 				});
-				sig = signed.sig;
+				_sig = signed.sig;
 			} catch (err) {
 				throw Error('User rejected signature');
 			}
 
-			return `_alias=${encodeURIComponent(alias)}&_app=${encodeURIComponent(app)}&_exp=${exp}&_sig=${sig}`;
+			return encodeParams({ _app: app, _exp: exp, _alias, _sig });
+			//return `_alias=${encodeURIComponent(alias)}&_app=${encodeURIComponent(app)}&_exp=${exp}&_sig=${sig}`;
 		}, resolve, { ensureMetaMask: true });
 	}
 
@@ -874,6 +877,7 @@ module.exports = {
 		getFiatConversionRates,
 		getActiveNetwork,
 		weiToFixedEth,
-		parseLogs
+		parseLogs,
+		encodeParams
 	}
 };
