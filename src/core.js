@@ -38,6 +38,7 @@ const CONTRACT = {
 
 const DEFAULTS = {
 	updateOnNetworkChange: true,
+	useOwnProvider: false,
 	provider: {
 		main: 'https://mainnet.infura.io/v3/1f0678a9617c4c7aa6896fd667aaa88c',
 		rinkeby: 'https://rinkeby.infura.io/v3/1f0678a9617c4c7aa6896fd667aaa88c'
@@ -251,6 +252,26 @@ const encodeParams = (data) => {
 	}).join('&');
 };
 
+const decodeParams = (str) => {
+	const data = {};
+  const components = str.split('&'); // Deconstruct it
+  for (let c of components) { // Build a regular 'ol object
+    const s = c.split('='); // Split params and set as key/value
+  	data[decodeURIComponent(s[0])] = decodeURIComponent(s[1]);
+  }
+  return data;
+};
+
+const decodeHypermeme = (str) => {
+	const decoded = decodeParams(str);
+	const data = {};
+	for (let k of Object.keys(decoded)) {
+		if (k !== '_sig') {
+			data[k] = decoded[k];
+		}
+	}
+	return { data, _sig: decoded._sig };
+};
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* API Instance */
@@ -263,7 +284,7 @@ class AliasEarth {
 	async init(options, resolve) {
 		return _op(async () => {
 			this.options = options ? { ...DEFAULTS, ...options } : DEFAULTS;
-			if (_isBrowser()) { // In browser
+			if (_isBrowser() && !this.options.useOwnProvider) { // Use injected window.ethereum
 				if (window.ethereum) { // Provider detected
 					this.options.provider = window.ethereum;
 					if (!this.options.network) { // Network not specified
@@ -273,6 +294,7 @@ class AliasEarth {
 						this.options.provider.on('networkChanged', (code) => {
 							this.options.network = NETWORK_CODES[code]
 						});
+
 					}
 				} else { // No injected provider
 					// TODO Prompt user to install MetaMask
@@ -639,9 +661,6 @@ class AliasEarth {
 			_fromAlias = await this.contract.methods.directory(_fromAddress).call();
 			_toAlias = utf8ToBytes20(toAlias);
 
-			//console.log('---fromAlias', hexToString(_fromAlias), _fromAlias);
-			//console.log('---toAlias', toAlias, _toAlias);
-
 			if (_fromAlias === _toAlias) { // Deposit to own alias
 				_tx(this.options.provider, this.contract.methods.depositToSelf().send({
 					from: _fromAddress,
@@ -697,6 +716,63 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Signatures and Auth */
 
+	async verifyHypermeme(href, resolve) {
+		return _op(async () => {
+
+			let msg;
+			let address;
+			let alias;
+			let code = 0;
+			let data;
+			let _sig;
+
+ 			if (href.indexOf('?') !== -1) {
+ 				msg = href.split('?')[1];
+ 			} else if (href.indexOf('#') !== -1) {
+ 				msg = href.split('#')[1];
+ 			}
+
+ 			if (!msg) {
+				throw Error({ responseCode: 400, msg: 'Failed to parse' });
+ 			}
+
+ 			try {
+ 				const decoded = decodeHypermeme(msg);
+ 				data = decoded.data;
+ 				_sig = decoded._sig;
+ 			} catch (err) {
+ 				throw Error({ responseCode: 400, msg: 'Failed to parse' });
+ 			}
+
+ 			console.log('---->data', data);
+
+			if (!_sig) {
+				throw Error({ responseCode: 400, msg: 'Required _sig param not provided' });
+			}
+
+			// try { // Decode message to get signing address
+			// 	address = recoverTypedSignature({ data: packTypedData(data), sig: _sig });
+			// } catch (err) {
+			// 	throw Error({ responseCode: 403, msg: '' });
+			// }
+
+			address = recoverTypedSignature({ data: packTypedData(data), sig: _sig });
+
+			try {	// Get alias name corresponding to address from blockchain
+				const hex = await this.contract.methods.directory(address).call();
+				alias = hexToString(hex);
+			} catch (err) {
+				throw Error({ responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' });
+			}
+
+			if (!alias) {
+				throw Error({ responseCode: 403, msg: 'Failed to verify signature' });
+			}
+ 
+			return { alias, address, _sig, data };
+		}, resolve);
+	}
+
 	async signDataWithMetaMask(data, resolve) {
 		return _op(async () => {
 			const eth = new Eth(this.options.provider);
@@ -709,7 +785,6 @@ class AliasEarth {
 
 	async signAuthParams({ app, exp }, resolve) {
 		return _op(async () => {
-
 			const _alias = await this.getActiveAlias();
 			let _sig;
 
@@ -737,7 +812,6 @@ class AliasEarth {
 			}
 
 			return encodeParams({ _app: app, _exp: exp, _alias, _sig });
-			//return `_alias=${encodeURIComponent(alias)}&_app=${encodeURIComponent(app)}&_exp=${exp}&_sig=${sig}`;
 		}, resolve, { ensureMetaMask: true });
 	}
 
@@ -787,6 +861,9 @@ class AliasEarth {
 			}
 
 			if (getCached) {
+				// getCached() is an arbitrary, optional function passed in that
+				// should return the alias for a given address. Devs can implement
+				// their own caching layer without altering the authentication flow
 				alias = await getCached(address);
 			}
 
