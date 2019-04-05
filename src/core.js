@@ -245,33 +245,64 @@ const parseLogs = (logs) => {
 	});
 };
 
-const encodeParams = (data) => {
-	return Object.keys(data).map(k => {
-		const v = data[k];
-		return `${k}=${encodeURIComponent(v)}`;
-	}).join('&');
-};
+const encodeHypermessageURI = (data) => {
 
-const decodeParams = (str) => {
-	const data = {};
-  const components = str.split('&'); // Deconstruct it
-  for (let c of components) { // Build a regular 'ol object
-    const s = c.split('='); // Split params and set as key/value
-  	data[decodeURIComponent(s[0])] = decodeURIComponent(s[1]);
-  }
-  return data;
-};
+	const extra = [];
+	const hyper = {
+		_signed_: [],
+		_params_: []
+	};
+	
+	const encode = (k, v) => {
+		return `${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+	}
 
-const decodeHypermeme = (str) => {
-	const decoded = decodeParams(str);
-	const data = {};
-	for (let k of Object.keys(decoded)) {
-		if (k !== '_sig') {
-			data[k] = decoded[k];
+	for (let d of Object.keys(data)) {
+		if (typeof hyper[d] !== 'undefined') {
+			for (let key of Object.keys(data[d])) { // Prefix subkeys
+				hyper[d].push(encode(d + key, data[d][key]));
+			}
+		} else {
+			extra.push(encode(d, data[d]));
 		}
 	}
-	return { data, _sig: decoded._sig };
+
+	return [ ...hyper._params_, ...hyper._signed_, ...extra ].join('&');
 };
+
+const decodeHypermessageURI = (uri) => {
+
+	let s = uri;
+	const extra = {};
+	const hyper = {
+		_signed_: {},
+		_params_: {}
+	};
+	
+	if (uri && uri.indexOf('#') !== -1) {
+		s = uri.split('#')[1];
+	}
+
+  const components = s.split('&');
+  for (let c of components) {
+  	let unsigned = true;
+  	const kvp = c.split('=');
+  	const key = decodeURIComponent(kvp[0]);
+  	const val = decodeURIComponent(kvp[1]);
+  	for (let prefix of Object.keys(hyper)) {
+  		if (key.indexOf(prefix) !== -1) {
+  			hyper[prefix][key.substring(prefix.length)] = val;
+  			unsigned = false;
+  		}
+  	}
+  	if (unsigned) {
+  		extra[key] = val;
+  	}
+  }
+
+	return { ...hyper, ...extra };
+};
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* API Instance */
@@ -437,7 +468,7 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Read Blockchain Data */
 
-	async isAliasAvailable(alias, resolve) {
+	async aliasExists(alias, resolve) {
 		return _op(async () => {
 
 			if (!alias) {
@@ -448,7 +479,7 @@ class AliasEarth {
 				utf8ToBytes20(alias)
 			).call();
 
-			return !exists;
+			return exists;
 		}, resolve);
 	}
 
@@ -471,14 +502,21 @@ class AliasEarth {
 		});
 	}
 
-	async getAddressFromAlias(alias, resolve) {
+	async getAddresses(alias, resolve) {
 		return _op(async () => {
 
 			if (!alias) {
 				throw Error('Must specify alias');
 			}
 
-			return await this.contract.methods.directory(alias).call();
+			const addresses = await this.contract.methods.accounts(
+				utf8ToBytes20(alias)
+			).call();
+
+			return {
+				linked: addresses[0] === ZERO_ADDRESS ? '' : addresses[0],
+				recovery: addresses[1] === ZERO_ADDRESS ? '' : addresses[1],
+			};
 		}, resolve);
 	}
 
@@ -515,16 +553,12 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Read Log Data */
 
-	async getLogs({ event, filter, fromBlock, toBlock }, resolve) {
+	getLogs({ event, filter, fromBlock, toBlock }, resolve) {
 		return _op(async () => {
 
 			const { network } = this.options;
 			const _fromBlock = !fromBlock || fromBlock < CONTRACT.deployed[network] ? CONTRACT.deployed[network] : fromBlock;
 			const _toBlock = toBlock || 'latest';
-
-			console.log('---fromBlock', _fromBlock);
-			console.log('---toBlock', _toBlock);
-			console.log('---filter', filter);
 
 			if (!(event === 'BalIORecord' || event === 'DirRecord' || event === 'SetData')) {
 				throw Error('Must specify \'event\' as \'BalIORecord\', \'DirRecord\', or \'SetData\'');
@@ -630,6 +664,41 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Funds API */
 
+	async sendEther({ toAddress, fromAddress, amount }, event, resolve) {
+		return _op(async () => {
+			let _fromAddress;
+
+			if (fromAddress) { // Explicit sender address
+				_fromAddress = fromAddress;
+			} else { // Autodetect
+				_fromAddress = await this.getActiveAddress();
+			}
+
+			if (!_fromAddress) {
+				throw Error('\'fromAddress\' was not specified and could not be auto-detected from MetaMask');
+			}
+
+			if (!amount) {
+				throw Error('Please specify the amount of wei that you want to deposit');
+			}
+
+			if (typeof amount !== 'string') {
+				throw Error('Please specify \'amount\' as a string to avoid accuracy errors');
+			}
+
+			if (!bigInt(amount).gt('0')) {
+				throw Error('\'amount\' must be a positive integer');
+			}
+
+			const web3 = new Web3(this.options.provider);
+			_tx(this.options.provider, web3.eth.sendTransaction({
+				to: toAddress,
+				from: _fromAddress,
+				value: amount
+			}), event);
+		});
+	}
+
 	async deposit({ toAlias, fromAddress, amount }, event, resolve) {
 		return _op(async () => {
 			let _fromAddress;
@@ -716,72 +785,178 @@ class AliasEarth {
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Signatures and Auth */
 
-	async verifyHypermeme(href, resolve) {
+	// TODO merge this with 'verify hypermessage'
+	// async decodeHypermessageURI(href, resolve) {
+	// 	return _op(async () => {
+
+	// 		let msg;
+	// 		let address;
+	// 		let alias;
+	// 		let data;
+	// 		let _sig;
+	// 		let _sigtype;
+
+ // 			if (href.indexOf('?') !== -1) {
+ // 				msg = href.split('?')[1];
+ // 			} else if (href.indexOf('#') !== -1) {
+ // 				msg = href.split('#')[1];
+ // 			}
+
+ // 			if (!msg) {
+	// 			throw { responseCode: 400, msg: 'Failed to parse' };
+ // 			}
+
+ // 			try {
+ // 				const decoded = decodeHypermessage(msg);
+ // 				data = decoded.data;
+ // 				_sig = decoded._sig;
+ // 				_sigtype = decoded._sigtype;
+ // 			} catch (err) {
+ // 				throw { responseCode: 400, msg: 'Failed to parse' };
+ // 			}
+
+	// 		if (!_sig) {
+	// 			throw { responseCode: 400, msg: 'Required _sig param not provided' };
+	// 		}
+
+	// 		if (_sigtype === 'metamask_typed') {
+	// 			address = recoverTypedSignature({ data: packTypedData(json.data), sig: _sig });
+	// 		} else {
+	// 			throw { responseCode: 400, msg: 'Required _sigtype param not provided' }
+	// 		}
+
+	// 		try {	// Get alias name corresponding to address from blockchain
+	// 			const hex = await this.contract.methods.directory(address).call();
+	// 			alias = hexToString(hex);
+	// 		} catch (err) {
+	// 			throw { responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' };
+	// 		}
+
+	// 		if (!alias) {
+	// 			throw { responseCode: 403, msg: 'Failed to verify signature' };
+	// 		}
+ 
+	// 		return {
+	// 			alias,
+	// 			address,
+	// 			data
+	// 			//data,
+	// 			// _sig,
+	// 			// _sigtype
+	// 		};
+	// 	}, resolve);
+	// }
+
+	async verifyHypermessage(data, options, resolve) {
 		return _op(async () => {
 
-			let msg;
 			let address;
 			let alias;
-			let code = 0;
-			let data;
-			let _sig;
 
- 			if (href.indexOf('?') !== -1) {
- 				msg = href.split('?')[1];
- 			} else if (href.indexOf('#') !== -1) {
- 				msg = href.split('#')[1];
- 			}
-
- 			if (!msg) {
-				throw Error({ responseCode: 400, msg: 'Failed to parse' });
- 			}
-
- 			try {
- 				const decoded = decodeHypermeme(msg);
- 				data = decoded.data;
- 				_sig = decoded._sig;
- 			} catch (err) {
- 				throw Error({ responseCode: 400, msg: 'Failed to parse' });
- 			}
-
- 			console.log('---->data', data);
-
-			if (!_sig) {
-				throw Error({ responseCode: 400, msg: 'Required _sig param not provided' });
+			if (!data) {
+				throw { responseCode: 400, msg: 'Hypermessage not found' };
 			}
 
-			// try { // Decode message to get signing address
-			// 	address = recoverTypedSignature({ data: packTypedData(data), sig: _sig });
-			// } catch (err) {
-			// 	throw Error({ responseCode: 403, msg: '' });
-			// }
+			const { _params_, _signed_ } = data;
 
-			address = recoverTypedSignature({ data: packTypedData(data), sig: _sig });
+ 			if (!data || !data._params_ || !data._signed_) {
+				throw { responseCode: 400, msg: 'Failed to parse hypermessage' };
+ 			}
+
+			if (!_params_.sig) {
+				throw { responseCode: 400, msg: 'Required \'sig\' parameter not provided' };
+			}
+
+			if (!_params_.alias) {
+				throw { responseCode: 400, msg: 'Required \'alias\' parameter not provided' };
+			}
+
+			if (!_params_.network) {
+				throw { responseCode: 400, msg: 'Required \'network\' parameter not provided' };
+			}
+
+			if (_params_.network !== this.options.network) {
+				throw { responseCode: 403, msg: 'Provided \'network\' parameter does not' };
+			}
+
+			if (_params_.sigtype === 'metamask_typed') {
+				address = recoverTypedSignature({ data: packTypedData(_signed_), sig: _params_.sig });
+			} else {
+				throw { responseCode: 400, msg: 'Required _sigtype param not provided' }
+			}
 
 			try {	// Get alias name corresponding to address from blockchain
 				const hex = await this.contract.methods.directory(address).call();
 				alias = hexToString(hex);
 			} catch (err) {
-				throw Error({ responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' });
+				throw { responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' };
 			}
+
+			if (alias !== _params_.alias) { // Mismatch
+				throw { responseCode: 403, msg: 'Failed to verify signature' };
+			}
+
+			// const unsigned = {};
+			// for (let d of Object.keys(data)) {
+			// 	if (d !== '_params_' && d !== '_signed_') {
+			// 		unsigned[d] = data[d];
+			// 	}
+			// }
+ 
+			return {
+				author: { alias, address },
+				params: _params_,
+				signed: _signed_, // Signed data with params
+				id: _params_.sig.substring(2, 26), // UUID generated from sig
+			};
+
+		}, resolve);
+	};
+
+	async createHypermessageMetaMask(_signed_, options, resolve) {
+		return _op(async () => {
+
+			if (!options || !options.encode) {
+				throw Error('Must specify \'encode\' as \'json\' or \'uri\' in options');
+			}
+
+			const signer = await this.getActiveAddress();
+			const alias = await this.getActiveAlias();
 
 			if (!alias) {
-				throw Error({ responseCode: 403, msg: 'Failed to verify signature' });
+				throw Error('Address selected in MetaMask is not linked to any alias');
 			}
- 
-			return { alias, address, _sig, data };
-		}, resolve);
-	}
 
-	async signDataWithMetaMask(data, resolve) {
-		return _op(async () => {
+			const packed = packTypedData(_signed_);
 			const eth = new Eth(this.options.provider);
-			const signer = await this.getActiveAddress();
-			const packed = packTypedData(data);
 			const sig = await eth.signTypedData(packed, signer);
-			return { data: packed, sig };
+			const _params_ = {
+				alias,
+				sig,
+				sigtype: 'metamask_typed',
+				network: this.options.network
+			};
+
+			if (options.encode === 'json') {
+				return { _signed_, _params_ };
+			} else if (options.encode === 'uri') {
+				return encodeHypermessageURI({ _signed_, _params_ });
+			}
+
 		}, resolve, { ensureMetaMask: true });
 	}
+
+	// async signDataWithMetaMask(data, resolve) {
+	// 	return _op(async () => {
+	// 		const eth = new Eth(this.options.provider);
+	// 		const signer = await this.getActiveAddress();
+	// 		const packed = packTypedData(data);
+	// 		const sig = await eth.signTypedData(packed, signer);
+	// 		return { data: packed, sig };
+	// 	}, resolve, { ensureMetaMask: true });
+	// }
+
+	// TODO these two methods are just a special case of creating a hypermessage
 
 	async signAuthParams({ app, exp }, resolve) {
 		return _op(async () => {
@@ -800,18 +975,20 @@ class AliasEarth {
 				throw Error('\'exp\' (expiry in unix time) must be provided');
 			}
 
-			try {
-				const signed = await this.signDataWithMetaMask({
-					'⚫': _alias,
-					'🔐': app,
-					'⏱️': exp
-				});
-				_sig = signed.sig;
-			} catch (err) {
-				throw Error('User rejected signature');
-			}
+			// TODO call encodeHypermessageWithMetaMask
 
-			return encodeParams({ _app: app, _exp: exp, _alias, _sig });
+			// try {
+			// 	const signed = await this.signDataWithMetaMask({
+			// 		'⚫': _alias,
+			// 		'🔐': app,
+			// 		'⏱️': exp
+			// 	});
+			// 	_sig = signed.sig;
+			// } catch (err) {
+			// 	throw Error('User rejected signature');
+			// }
+
+			// return encodeParams({ _app: app, _exp: exp, _alias, _sig });
 		}, resolve, { ensureMetaMask: true });
 	}
 
@@ -824,27 +1001,27 @@ class AliasEarth {
 			let alias;
 
 			if (!_alias) {
-				throw Error({ responseCode: 400, msg: 'alias (alias mapped to signing address) must be provided in (eg \'alice\')' });
+				throw { responseCode: 400, msg: 'alias (alias mapped to signing address) must be provided in (eg \'alice\')' };
 			}
 
 			if (!_app) {
-				throw Error({ responseCode: 400, msg: 'app (application name) must be provided (eg \'myapp\')' });
+				throw { responseCode: 400, msg: 'app (application name) must be provided (eg \'myapp\')' };
 			}
 
 			if (!_exp) {
-				throw Error({ responseCode: 400, msg: 'exp (expiry time) not provided (eg \'1524241200\'' });
+				throw { responseCode: 400, msg: 'exp (expiry time) not provided (eg \'1524241200\'' };
 			}
 
 			if (!_sig) {
-				throw Error({ responseCode: 400, msg: 'Sig not provided' });
+				throw { responseCode: 400, msg: 'Sig not provided' };
 			}
 
 			if (_now > _exp) { // Sig expired
-				throw Error({ responseCode: 403, msg: 'Signature expired' });
+				throw { responseCode: 403, msg: 'Signature expired' };
 			}
 
 			if (_exp > _now + maxSession) {
-				throw Error({ responseCode: 403, msg: `exp time too far in the future. Server\'s maxSession is ${maxSession} seconds` });
+				throw { responseCode: 403, msg: `exp time too far in the future. Server\'s maxSession is ${maxSession} seconds` };
 			}
 
 			// Pack data how it would have been signed on the client
@@ -857,7 +1034,7 @@ class AliasEarth {
 			try { // Compute signing address based on provided sig
 				address = recoverTypedSignature({ data, sig: _sig });
 			} catch (err) {
-				throw Error({ responseCode: 403, msg: 'Failed to validate signature' });
+				throw { responseCode: 403, msg: 'Failed to validate signature' };
 			}
 
 			if (getCached) {
@@ -872,12 +1049,12 @@ class AliasEarth {
 					const hex = await this.contract.methods.directory(address).call();
 					alias = hexToString(hex);
 				} catch (err) {
-					throw Error({ responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' });
+					throw { responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' };
 				}
 			}
 
 			if (alias !== _alias) { // Alias doesn't match
-				throw Error({ responseCode: 403, msg: 'Failed to validate signature' });
+				throw { responseCode: 403, msg: 'Failed to validate signature' };
 			}
 
 			return { address, alias, app: _app, exp: _exp, sig: _sig };
@@ -955,6 +1132,9 @@ module.exports = {
 		getActiveNetwork,
 		weiToFixedEth,
 		parseLogs,
-		encodeParams
+		//encodeParams,
+		//decodeParams,
+		encodeHypermessageURI,
+		decodeHypermessageURI
 	}
 };
