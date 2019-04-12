@@ -18,7 +18,8 @@ import {
 	toUnsigned,
 	stripHexPrefix,
 	fromRpcSig,
-	ecrecover
+	ecrecover,
+	toChecksumAddress
 } from 'ethereumjs-util';
 
 
@@ -117,7 +118,9 @@ const _tx = async (provider, tx, event) => {
 			}
 		}, 20000); // Assume 20 secs / block
 		event({ name: 'hash', data: hash });
-	}); // Transaction was sent
+	}).on('error', () => {
+		event({ name: 'error' });
+	});
 };
 
 
@@ -138,9 +141,9 @@ const isAliasBytes20 = (alias) => {
 	return utf8ByteLength(alias) <= 40;
 }
 
-const isSameAddress = (a, b) => {
-	return a.toUpperCase() === b.toUpperCase();
-}
+const bytes32ToAddress = (bytes32) => {
+	return toChecksumAddress('0x' + bytes32.substring(26));
+};
 
 const packTypedData = (data) => {
 	return Object.keys(data).map(k => {
@@ -187,6 +190,10 @@ const getActiveNetwork = () => {
 	let network = null;
 	if (_isBrowser() && window.ethereum) {
 		const { networkVersion } = window.ethereum;
+
+		console.log('window.ethereum ...', window.ethereum);
+		console.log('network version ...', networkVersion);
+
 		network = NETWORK_CODES[networkVersion];
 	}
 	return network;
@@ -281,9 +288,12 @@ const decodeHypermessageURI = (uri) => {
 	
 	if (uri && uri.indexOf('#') !== -1) {
 		s = uri.split('#')[1];
+	} else if (uri && uri.indexOf('?') !== -1) {
+		s = uri.split('?')[1];
 	}
 
   const components = s.split('&');
+
   for (let c of components) {
   	let unsigned = true;
   	const kvp = c.split('=');
@@ -303,6 +313,59 @@ const decodeHypermessageURI = (uri) => {
 	return { ...hyper, ...extra };
 };
 
+const HypermessageParser = (options) => {
+
+	return async (req, res, next) => {
+
+		try {
+
+			const _options = {
+				timeDeltaMax: 300,
+				requireTimestamp: true,
+				...[options || {}]
+			};
+
+			const core = req.app.get('core');
+			const received = Math.floor(Date.now() / 1000);
+			let data;
+
+			if (req.body._params_) { // json encoded
+				data = req.body;
+			} else { // uri encoded
+				data = decodeHypermessageURI(req.url);
+			}
+
+			if (!core) {
+				throw { responseCode: 500, msg: 'Expected reference to \'core\' set on express app object' };
+			}
+
+			if (!data) {
+				throw { responseCode: 400, msg: 'Failed to parse hypermessage' };
+			}
+
+			const verified = await core.verifyHypermessage(data);
+
+			if (_options.requireTimestamp) {
+				const t = parseInt(verified.signed['🕒']);
+				if (!t || isNaN(t) || !isFinite(t)) {
+					throw	{ responseCode: 400, msg: `Signed data must include \'🕒\' (time) in seconds since unix epoch (e.g. ${received})` };
+				}
+
+				if (Math.abs(received - t) > _options.timeDeltaMax) { // 5 mins window
+					throw { responseCode: 400, msg: `Difference between \'🕒\' (time) in signed data and time measured by server exceeds timeDeltaMax (${options.timeDeltaMax} secs) -- please ensure client device clock is accurate.`};
+				}
+			}
+
+			req.hypermessage = { ...verified, received };
+			next();
+
+		} catch (err) {
+			console.log('ERROR', err);
+			res.status(err.responseCode || 500).send(err.msg);
+		}
+	};
+}
+
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* API Instance */
@@ -320,6 +383,9 @@ class AliasEarth {
 					this.options.provider = window.ethereum;
 					if (!this.options.network) { // Network not specified
 						this.options.network = getActiveNetwork();
+
+						console.log('------network auto-detected1', this.options.network);
+
 					}
 					if (this.options.updateOnNetworkChange) {
 						this.options.provider.on('networkChanged', (code) => {
@@ -333,6 +399,8 @@ class AliasEarth {
 			} else { // Not in browser
 				this.options.provider = new Web3.providers.HttpProvider(DEFAULTS.provider[this.options.network]);
 			}
+
+			console.log('------network auto-detected2', this.options.network);
 
 			if (!this.options.network) {
 				throw Error("Network not found. Please specify 'main', 'rinkeby', 'ropsten', or 'kovan'");
@@ -381,8 +449,8 @@ class AliasEarth {
 	async setLinkedAddress({ alias, newLinked, from }, event, resolve) {
 		return _op(async () => {
 
-			let _from;
-			if (!from) {
+			let _from = from;
+			if (!_from) {
 				_from = await this.getActiveAddress();
 			}
 
@@ -412,8 +480,8 @@ class AliasEarth {
 	async setRecoveryAddress({ alias, recovery, from }, event, resolve) {
 		_op(async () => {
 
-			let _from;
-			if (!from) {
+			let _from = from;
+			if (!_from) {
 				_from = await this.getActiveAddress();
 			}
 
@@ -432,6 +500,8 @@ class AliasEarth {
 			if (!_from) {
 				throw Error('Failed to detect sender address, please specify \'from\'');
 			}
+
+			console.log('--------from-core', _from);
 
 			_tx(this.options.provider, this.contract.methods.setRecoveryAddress(
 				utf8ToBytes20(alias),
@@ -454,12 +524,8 @@ class AliasEarth {
 			if (!isAddress(recovery)) {
 				throw Error('\'recovery\' is not a valid Ethereum address');
 			}
- 
-			if (!_from) {
-				throw Error('Failed to detect sender address, please specify \'from\'');
-			}
 
-			_tx(this.options.provider, this.contract.methods.setRecoveryAddress(
+			_tx(this.options.provider, this.contract.methods.recover(
 				utf8ToBytes20(alias)
 			).send({ from: recovery }), event);
 		}, resolve);
@@ -778,75 +844,6 @@ class AliasEarth {
 		}, resolve);
 	}
 
-	// async transfer() {
-	// 	// TODO transfer ether internally
-	// }
-
-	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
-	/* Signatures and Auth */
-
-	// TODO merge this with 'verify hypermessage'
-	// async decodeHypermessageURI(href, resolve) {
-	// 	return _op(async () => {
-
-	// 		let msg;
-	// 		let address;
-	// 		let alias;
-	// 		let data;
-	// 		let _sig;
-	// 		let _sigtype;
-
- // 			if (href.indexOf('?') !== -1) {
- // 				msg = href.split('?')[1];
- // 			} else if (href.indexOf('#') !== -1) {
- // 				msg = href.split('#')[1];
- // 			}
-
- // 			if (!msg) {
-	// 			throw { responseCode: 400, msg: 'Failed to parse' };
- // 			}
-
- // 			try {
- // 				const decoded = decodeHypermessage(msg);
- // 				data = decoded.data;
- // 				_sig = decoded._sig;
- // 				_sigtype = decoded._sigtype;
- // 			} catch (err) {
- // 				throw { responseCode: 400, msg: 'Failed to parse' };
- // 			}
-
-	// 		if (!_sig) {
-	// 			throw { responseCode: 400, msg: 'Required _sig param not provided' };
-	// 		}
-
-	// 		if (_sigtype === 'metamask_typed') {
-	// 			address = recoverTypedSignature({ data: packTypedData(json.data), sig: _sig });
-	// 		} else {
-	// 			throw { responseCode: 400, msg: 'Required _sigtype param not provided' }
-	// 		}
-
-	// 		try {	// Get alias name corresponding to address from blockchain
-	// 			const hex = await this.contract.methods.directory(address).call();
-	// 			alias = hexToString(hex);
-	// 		} catch (err) {
-	// 			throw { responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' };
-	// 		}
-
-	// 		if (!alias) {
-	// 			throw { responseCode: 403, msg: 'Failed to verify signature' };
-	// 		}
- 
-	// 		return {
-	// 			alias,
-	// 			address,
-	// 			data
-	// 			//data,
-	// 			// _sig,
-	// 			// _sigtype
-	// 		};
-	// 	}, resolve);
-	// }
-
 	async verifyHypermessage(data, options, resolve) {
 		return _op(async () => {
 
@@ -895,13 +892,6 @@ class AliasEarth {
 			if (alias !== _params_.alias) { // Mismatch
 				throw { responseCode: 403, msg: 'Failed to verify signature' };
 			}
-
-			// const unsigned = {};
-			// for (let d of Object.keys(data)) {
-			// 	if (d !== '_params_' && d !== '_signed_') {
-			// 		unsigned[d] = data[d];
-			// 	}
-			// }
  
 			return {
 				author: { alias, address },
@@ -913,23 +903,36 @@ class AliasEarth {
 		}, resolve);
 	};
 
-	async createHypermessageMetaMask(_signed_, options, resolve) {
+	async createHypermessage(signed, options, resolve) {
 		return _op(async () => {
+
+			// TODO add support for sigtype 'native'
 
 			if (!options || !options.encode) {
 				throw Error('Must specify \'encode\' as \'json\' or \'uri\' in options');
 			}
 
+			const _options = {
+				timestamp: true,
+				...options
+			};
+
 			const signer = await this.getActiveAddress();
 			const alias = await this.getActiveAlias();
 
 			if (!alias) {
-				throw Error('Address selected in MetaMask is not linked to any alias');
+				throw Error('Signing address is not linked to any alias');
 			}
 
-			const packed = packTypedData(_signed_);
+			const { timestamp, encode } = _options;
 			const eth = new Eth(this.options.provider);
-			const sig = await eth.signTypedData(packed, signer);
+			const _signed_ = timestamp ? {
+				...signed,
+				'🕒': Math.floor(Date.now() / 1000)
+			} : signed;
+
+			const sig = await eth.signTypedData(packTypedData(_signed_), signer);
+
 			const _params_ = {
 				alias,
 				sig,
@@ -937,128 +940,13 @@ class AliasEarth {
 				network: this.options.network
 			};
 
-			if (options.encode === 'json') {
+			if (encode === 'json') {
 				return { _signed_, _params_ };
-			} else if (options.encode === 'uri') {
+			} else if (encode === 'uri') {
 				return encodeHypermessageURI({ _signed_, _params_ });
 			}
 
 		}, resolve, { ensureMetaMask: true });
-	}
-
-	// async signDataWithMetaMask(data, resolve) {
-	// 	return _op(async () => {
-	// 		const eth = new Eth(this.options.provider);
-	// 		const signer = await this.getActiveAddress();
-	// 		const packed = packTypedData(data);
-	// 		const sig = await eth.signTypedData(packed, signer);
-	// 		return { data: packed, sig };
-	// 	}, resolve, { ensureMetaMask: true });
-	// }
-
-	// TODO these two methods are just a special case of creating a hypermessage
-
-	async signAuthParams({ app, exp }, resolve) {
-		return _op(async () => {
-			const _alias = await this.getActiveAlias();
-			let _sig;
-
-			if (!_alias) {
-				throw Error('The currently selected address is not associated with any alias');
-			}
-
-			if (!app) {
-				throw Error('\'app\' (application name) must be provided');
-			}
-
-			if (!exp) {
-				throw Error('\'exp\' (expiry in unix time) must be provided');
-			}
-
-			// TODO call encodeHypermessageWithMetaMask
-
-			// try {
-			// 	const signed = await this.signDataWithMetaMask({
-			// 		'⚫': _alias,
-			// 		'🔐': app,
-			// 		'⏱️': exp
-			// 	});
-			// 	_sig = signed.sig;
-			// } catch (err) {
-			// 	throw Error('User rejected signature');
-			// }
-
-			// return encodeParams({ _app: app, _exp: exp, _alias, _sig });
-		}, resolve, { ensureMetaMask: true });
-	}
-
-	async verifyAuthParams({ _alias, _app, _exp, _sig }, { app, maxSession, getCached }, resolve) {
-		return _op(async () => {
-
-			const _maxSession = maxSession || 2592000; // 30 days
-			const _now = Math.floor(Date.now() / 1000);
-			let address;
-			let alias;
-
-			if (!_alias) {
-				throw { responseCode: 400, msg: 'alias (alias mapped to signing address) must be provided in (eg \'alice\')' };
-			}
-
-			if (!_app) {
-				throw { responseCode: 400, msg: 'app (application name) must be provided (eg \'myapp\')' };
-			}
-
-			if (!_exp) {
-				throw { responseCode: 400, msg: 'exp (expiry time) not provided (eg \'1524241200\'' };
-			}
-
-			if (!_sig) {
-				throw { responseCode: 400, msg: 'Sig not provided' };
-			}
-
-			if (_now > _exp) { // Sig expired
-				throw { responseCode: 403, msg: 'Signature expired' };
-			}
-
-			if (_exp > _now + maxSession) {
-				throw { responseCode: 403, msg: `exp time too far in the future. Server\'s maxSession is ${maxSession} seconds` };
-			}
-
-			// Pack data how it would have been signed on the client
-			const data = packTypedData({
-				'⚫': _alias,
-				'🔐': _app,
-				'⏱️': _exp
-			});
-
-			try { // Compute signing address based on provided sig
-				address = recoverTypedSignature({ data, sig: _sig });
-			} catch (err) {
-				throw { responseCode: 403, msg: 'Failed to validate signature' };
-			}
-
-			if (getCached) {
-				// getCached() is an arbitrary, optional function passed in that
-				// should return the alias for a given address. Devs can implement
-				// their own caching layer without altering the authentication flow
-				alias = await getCached(address);
-			}
-
-			if (!alias) { // Didn't get a value from cache
-				try {	// Get alias name corresponding to address from blockchain
-					const hex = await this.contract.methods.directory(address).call();
-					alias = hexToString(hex);
-				} catch (err) {
-					throw { responseCode: 500, msg: 'Failed to verify data from blockchain. This is most likely a network error.' };
-				}
-			}
-
-			if (alias !== _alias) { // Alias doesn't match
-				throw { responseCode: 403, msg: 'Failed to validate signature' };
-			}
-
-			return { address, alias, app: _app, exp: _exp, sig: _sig };
-		}, resolve);
 	}
 
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
@@ -1114,6 +1002,7 @@ const connect = async (options, resolve) => {
 module.exports = {
 	connect, // Get high level api
 	getContractInstance, // Just the contract object
+	HypermessageParser,
 	constants: {
 		CONTRACT,
 		DEFAULTS,
@@ -1124,7 +1013,7 @@ module.exports = {
 		utf8ToBytes20,
 		utf8ByteLength,
 		isAliasBytes20,
-		isSameAddress,
+		bytes32ToAddress,
 		packTypedData,
 		signData,
 		getSigningAddress,
@@ -1132,8 +1021,6 @@ module.exports = {
 		getActiveNetwork,
 		weiToFixedEth,
 		parseLogs,
-		//encodeParams,
-		//decodeParams,
 		encodeHypermessageURI,
 		decodeHypermessageURI
 	}
