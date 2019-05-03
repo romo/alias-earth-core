@@ -1,6 +1,6 @@
 {
   "name": "@alias-earth/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -29,13 +29,13 @@
     "@babel/preset-env": "^7.3.4"
   },
   "dependencies": {
-    "@babel/runtime": "^7.3.4",
-    "axios": "^0.18.0",
-    "big-integer": "^1.6.42",
-    "eth-sig-util": "^1.4.2",
-    "ethereumjs-util": "^6.1.0",
-    "ethjs": "^0.4.0",
-    "web3": "^1.0.0-beta.48",
-    "web3-utils": "^1.0.0-beta.48"
+    "@babel/runtime": "7.3.4",
+    "axios": "0.18.0",
+    "big-integer": "1.6.42",
+    "eth-sig-util": "1.4.2",
+    "ethereumjs-util": "6.1.0",
+    "ethjs": "0.4.0",
+    "web3": "1.0.0-beta.48",
+    "web3-utils": "1.0.0-beta.48"
   }
 }

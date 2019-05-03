@@ -113,7 +113,6 @@ const _tx = async (provider, tx, event) => {
 						});
 					}
 				} catch (err) {
-					console.log(err);
 				}
 			}
 		}, 20000); // Assume 20 secs / block
@@ -153,6 +152,8 @@ const packTypedData = (data) => {
 			name: k,
 			value: typeof value === 'string' ? value : JSON.stringify(value)
 		};
+	}).sort((a, b) => {
+		return a.name.localeCompare(b.name);
 	});
 }
 
@@ -190,10 +191,6 @@ const getActiveNetwork = () => {
 	let network = null;
 	if (_isBrowser() && window.ethereum) {
 		const { networkVersion } = window.ethereum;
-
-		console.log('window.ethereum ...', window.ethereum);
-		console.log('network version ...', networkVersion);
-
 		network = NETWORK_CODES[networkVersion];
 	}
 	return network;
@@ -360,7 +357,6 @@ const HypermessageParser = (options) => {
 			next();
 
 		} catch (err) {
-			console.log('ERROR', err);
 			res.status(err.responseCode || 500).send(err.msg);
 		}
 	};
@@ -383,9 +379,6 @@ class AliasEarth {
 					this.options.provider = window.ethereum;
 					if (!this.options.network) { // Network not specified
 						this.options.network = getActiveNetwork();
-
-						console.log('------network auto-detected1', this.options.network);
-
 					}
 					if (this.options.updateOnNetworkChange) {
 						this.options.provider.on('networkChanged', (code) => {
@@ -399,8 +392,6 @@ class AliasEarth {
 			} else { // Not in browser
 				this.options.provider = new Web3.providers.HttpProvider(DEFAULTS.provider[this.options.network]);
 			}
-
-			console.log('------network auto-detected2', this.options.network);
 
 			if (!this.options.network) {
 				throw Error("Network not found. Please specify 'main', 'rinkeby', 'ropsten', or 'kovan'");
@@ -500,8 +491,6 @@ class AliasEarth {
 			if (!_from) {
 				throw Error('Failed to detect sender address, please specify \'from\'');
 			}
-
-			console.log('--------from-core', _from);
 
 			_tx(this.options.provider, this.contract.methods.setRecoveryAddress(
 				utf8ToBytes20(alias),
@@ -873,7 +862,7 @@ class AliasEarth {
 			}
 
 			if (_params_.network !== this.options.network) {
-				throw { responseCode: 403, msg: 'Provided \'network\' parameter does not' };
+				throw { responseCode: 403, msg: 'Provided \'network\' parameter does not match' };
 			}
 
 			if (_params_.sigtype === 'metamask_typed') {
