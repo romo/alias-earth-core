@@ -46,12 +46,12 @@ const DEFAULTS = {
 	}
 };
 
-const SUPPORTED_NETWORKS = ['main', 'rinkeby', 'kovan', 'ropsten'];
+const SUPPORTED_NETWORKS = ['main', 'rinkeby'/*, 'kovan', 'ropsten'*/];
 
 const NETWORK_CODES = {
 	'1': 'main',
-	'3': 'ropsten',
-	'42': 'kovan',
+	//'3': 'ropsten',
+	//'42': 'kovan',
 	'4': 'rinkeby'
 };
 
