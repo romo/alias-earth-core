@@ -14,10 +14,10 @@ This package is a wrapper around a vanilla web3 contract instance providing a hi
 - [getAliasFromAddress](#reading-alias-data-get-alias-from-address)
 - [getAddresses](#reading-alias-data-get-addresses)
 
-#### Hypermessage Protocol
-- [Anatomy of a Hypermessage](#hypermessage-protocol-anatomy)
-- [Create Hypermessage](#hypermessage-protocol-create)
-- [Verify Hypermessage](#hypermessage-protocol-verify)
+#### Hypermessage Utils
+- [Create Hypermessage](#hypermessage-utils-create)
+- [Verify Hypermessage](#hypermessage-utils-verify)
+- [Hypermessage Parser](#hypermessage-utils-parser)
 
 ## Quick Start
 
@@ -141,11 +141,11 @@ Returns an object with both the `linked` and `recovery` addresses for a given `a
   - `linked`: primary linked address
   - `recovery`: recovery address
 
-## Hypermessage Protocol
+## Hypermessage Utils
 
-The core module provides functions for creating and verifying signed data linked to an identity on the blockchain in a standardized way. Consistency is important because the receiver of a hypermessage has to know how to structure the data in order to verify its signature, and also in terms of promoting interoperability between apps that support alias.earth.
+The core module provides functions for creating and verifying signed data linked to an identity on the blockchain in a standardized way. Consistency is important because the receiver of a hypermessage has to know how to structure the data in order to verify the signature.
 
-#### <a name="hypermessage-protocol-anatomy">Anatomy of a Hypermessage</a>
+##### Anatomy of a Hypermessage
 
 ```json
 {
@@ -165,9 +165,9 @@ The core module provides functions for creating and verifying signed data linked
 
 A hypermessage has two parts: The `_signed_` object is the actual data that is signed by on the client using MetaMask. The `_params_` object is meta data which allows the receiver (such as an API server) to verify the signature (i.e. find the signing Ethereum address) and look up which alias that address is linked to on the blockchain. The '🕒' (unix timestamp, according to client) is added automatically so that it's possible for apps to enforce expiry times.
 
-**IMPORTANT NOTE:** If you are using hypermessages for auth, you should always include something like `{ "app": "my_unique_app_name" }` in the signed data and explicitly check for that on your server. Otherwise it might be possible for an attacker who intercepts a hypermessage that the user has created in other context to sign in to your application.
+**IMPORTANT NOTE:** If you are using hypermessages for auth, you should always include something like `{ "app": "my_unique_app_name" }` in the signed data and explicitly check for that on your server. Otherwise it might be possible for an attacker who intercepts a hypermessage that the user has created in another context to sign in to your application.
 
-#### <a name="hypermessage-protocol-create">Create Hypermessage</a>
+#### <a name="hypermessage-utils-create">Create Hypermessage</a>
 
 ```js
 // On sender's machine, assuming MetaMask is installed
@@ -201,7 +201,7 @@ Creating a hypermessage is dead simple. Pass an object that contains the data th
   	- `sig_type`: format data was packed in for signing
   	- `network`: 'main' or 'rinkeby'
 
-#### <a name="hypermessage-protocol-verify">Verify Hypermessage</a>
+#### <a name="hypermessage-utils-verify">Verify Hypermessage</a>
 
 ```js
 // On the receiver's machine
@@ -234,3 +234,44 @@ The blockchain makes it possible for hypermessages (both integrity and authorshi
 	-	`author` *verifed authorship info*
 		- `alias`: alias that signed data (from blockchain)
 		- `address`: address that signed data (computed)
+
+#### <a name="hypermessage-utils-parser">Hypermessage Parser</a>
+
+```js
+// On express server
+
+const express = require('express');
+const parser = require('body-parser');
+const earth = require('@alias-earth/core');
+
+const app = express();
+app.use(parser.json());
+
+// The parser is looking for a json-encoded hypermessage
+// in `req.body`, or url-encoded in `req.url`. Requests that
+// do not contain a hypermessage or cannot be verified are
+// rejected. Otherwise the parser sets the verified data
+// on `req.hypermessage` before calling `next()`.
+app.use(earth.HypermessageParser());
+
+app.post('/message', (req, res) => {
+
+	// The decoded and verified hypermessage
+	// is available on `req.hypermessage`
+
+	console.log(req.hypermessage); // { id: '0x...', signed: { ... }, params: { ... }, author: { ... }, received: 1557277420 }
+});
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
