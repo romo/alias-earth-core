@@ -1,6 +1,6 @@
 ## Welcome
 
-This package is a wrapper around a vanilla web3 contract instance providing a high-level JavaScript API to interact with alias.earth on the Ethereum blockchain [on the mainnet](https://etherscan.io/address/0x8F6A7781F54335D10d02bDD9ce66ACE1647AbCA7) or [on the Rinkeby testnet](https://rinkeby.etherscan.io/address/0x731C54d14d853af7f6CB587c680Efc1db11a3757) from any MetaMask-enabled browser or Node backend. We're seeking developers to build applications that users can interact with using their alias.earth name. Please [join developer Discord](https://discord.gg/UDbqesA) to see what others are bulding and to get answers for any questions (or ideas / feature requests!) in this experimental pre-release.
+This package is a wrapper around a vanilla web3 contract instance providing a high-level JavaScript API to interact with alias.earth on the Ethereum blockchain [on the mainnet](https://etherscan.io/address/0x8F6A7781F54335D10d02bDD9ce66ACE1647AbCA7) or [on the Rinkeby testnet](https://rinkeby.etherscan.io/address/0x731C54d14d853af7f6CB587c680Efc1db11a3757) from any MetaMask-enabled browser or Node backend. We're seeking developers to build applications that users can interact with using their alias.earth name and providing an alernative to centralized social media platforms. Please [join developer Discord](https://discord.gg/UDbqesA) to see what others are building and to get answers for any questions (or ideas / feature requests!) in this experimental pre-release.
 
 ## Contents
 
@@ -16,15 +16,14 @@ This package is a wrapper around a vanilla web3 contract instance providing a hi
 
 #### Hypermessage Protocol
 - [Anatomy of a Hypermessage](#hypermessage-protocol-anatomy)
-
-
-#### Utils
+- [Create Hypermessage](#hypermessage-protocol-create)
+- [Verify Hypermessage](#hypermessage-protocol-verify)
 
 ## Quick Start
 
 `npm i --save @alias-earth/core`
 
-Assuming you're in a metamask enabled browser, all you have to do is import the module and call `connect()`. By default, alias.earth will use the injected provider at `window.ethereum` (if it exists) to connect to the Ethereum mainnet. **We're using the async/await syntax in these examples**, but you can also pass a function to `connect()` (or any asynchronous function in this API) as the second parameter which will be called in the standard Node-style `(err, result) => { ... }` callback pattern.
+Assuming you're in a MetaMask enabled browser, all you need to do is import the module and call `connect()`. By default, alias.earth will use the injected provider at `window.ethereum` (if it exists) to connect to the Ethereum mainnet. **We're using the async/await syntax in these examples**, but you can also pass a function to `connect()` (or any asynchronous function in this API) as the second parameter which will be called in the standard Node-style `(err, result) => { ... }` callback pattern.
 
 #### <a name="quick-start-usage-with-metamask">Usage With MetaMask</a>
 
@@ -104,7 +103,7 @@ const available = await core.isAddressAvailable('0x19646E56d36615A1A723650a2c65E
 console.log(available); // false
 ```
 
-Returns `true` if the given Etheruem `address` is or has ever been used as the managing address *or* the recovery address for any alias. This one-time-use policy for addresses is enforced by the contract to as a security measure.
+Returns `true` if the given Etheruem `address` is or has ever been used as the managing address *or* the recovery address for any alias. This one-time-use policy for addresses is enforced at the contract level as a security measure.
 
 ##### Parameters
 - `address`: required, address for which to check availability
@@ -133,19 +132,19 @@ console.log(linked); // '0x19646E56d36615A1A723650a2c65E4311D84bE70'
 console.log(recovery); // '0x01061E883d375C36fE30776d1aba3627bfbd67BC'
 ```
 
-Returns and object with both the `linked` and `recovery` addresses for a given `alias`. If either doesn't exist (in the case of the linked address the only way that could happen is if the alias itself didn't exist), return an empty string for that address.
+Returns an object with both the `linked` and `recovery` addresses for a given `alias`. If either doesn't exist (in the case of the linked address the only way that could happen is if the alias itself didn't exist), return an empty string for that address.
 
 ##### Parameters
 - `alias`: required, alias for which to find linked and recovery addresses
 
 ##### Returns `Object`
 - `Object` *addresses*
-  - `linked`: String, primary linked address
-  - `recovery`: String, recovery address
+  - `linked`: primary linked address
+  - `recovery`: recovery address
 
 ## Hypermessage Protocol
 
-The core module provides functions for creating and verifying signed data linked to an identity on the blockchain in a standardized way. Creating signed messages in a consistent way is important not only becuase a the receiver has to know how to structure the data in order to verify it's signature, but also to promote interoperability between platforms that support alias.earth.
+The core module provides functions for creating and verifying signed data linked to an identity on the blockchain in a standardized way. Consistency is important because the receiver of a hypermessage has to know how to structure the data in order to verify its signature, and also in terms of promoting interoperability between apps that support alias.earth.
 
 #### <a name="hypermessage-protocol-anatomy">Anatomy of a Hypermessage</a>
 
@@ -165,15 +164,74 @@ The core module provides functions for creating and verifying signed data linked
 }
 ```
 
-A hypermessage has two parts: The `_signed_` object is the actual data that is signed by on the client using MetaMask. The `_params_` object is meta data which allows that receiver (such as an API server) to verify the signature (i.e. find the signing Ethereum address) and look up which alias that address is linked to on the blockchain.
+A hypermessage has two parts: The `_signed_` object is the actual data that is signed by on the client using MetaMask. The `_params_` object is meta data which allows the receiver (such as an API server) to verify the signature (i.e. find the signing Ethereum address) and look up which alias that address is linked to on the blockchain. The '🕒' (unix timestamp, according to client) is added automatically so that it's possible for apps to enforce expiry times.
 
-## Utils
+**IMPORTANT NOTE:** If you are using hypermessages for auth, you should always include something like `{ "app": "my_unique_app_name" }` in the signed data and explicitly check for that on your server. Otherwise it might be possible for an attacker who intercepts a hypermessage that the user has created in other context to sign in to your application.
 
+#### <a name="hypermessage-protocol-create">Create Hypermessage</a>
 
+```js
+// On sender's machine, assuming MetaMask is installed
 
+let hypermessage;
 
+try {
 
+	// Simply pass an object containing the data to be signed
+	hypermessage = await core.createHypermessage({ foo: bar });
 
+} catch (err) {
+	// User rejected sig request
+}
 
+console.log(hypermessage); // { _signed_: { ... }, _params_: { ... } }
+```
 
+Creating a hypermessage is dead simple. Pass an object that contains the data that the user needs to sign and MetaMask will pop up asking the user to confirm the signature, using whatever address it currently selected in MetaMask. Now the hypermessage can be sent to anyone.
 
+##### Parameters
+- `data`: required, object containing the data to be signed
+
+##### Returns `Object`
+- `Object` *hypermessage*
+  - `_signed_`: *data that was signed*
+  	- '🕒': timestamp is added automatically
+  - `_params_`: *params to verify sig*
+  	- `alias`: alias linked to signing address
+  	- `sig`: cryptographic signature
+  	- `sig_type`: format data was packed in for signing
+  	- `network`: 'main' or 'rinkeby'
+
+#### <a name="hypermessage-protocol-verify">Verify Hypermessage</a>
+
+```js
+// On the receiver's machine
+
+let verified;
+
+try {
+	verified = await core.verifyHypermessage(hypermessage);
+} catch (err) {
+	// Failed to verify
+}
+
+console.log(verified); // { id: '0x...', signed: { ... }, params: { ... }, author: { ... } }
+```
+
+The blockchain makes it possible for hypermessages (both integrity and authorship) to be trustlessly verified by anyone.
+
+##### Parameters
+- `hypermessage`: required, hypermessage to verify
+
+##### Returns `Object`
+- `Object` *hypermessage*
+	- `id`: first 24 chars (excluding hex prefix) of signature, can be used as uuid
+	- `signed` *data that was signed*
+	- `params` *params by which sig was verified*
+	  - `alias`: alias (claimed by sender)
+	  - `sig`: cryptographic signature
+	  - `sig_type`: format data was packed in for signing
+	  - `network`: 'main' or 'rinkeby'
+	-	`author` *verifed authorship info*
+		- `alias`: alias that signed data (from blockchain)
+		- `address`: address that signed data (computed)
