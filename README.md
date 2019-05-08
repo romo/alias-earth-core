@@ -150,16 +150,16 @@ The core module provides functions for creating and verifying signed data linked
 
 ```json
 {
-	"_signed_": { // Data that was signed
-		"foo": "bar", // Arbitrary data
+	"_signed_": {
+		"foo": "bar",
 		"fooo": "baaar",
-		"🕒": "1557277420" // Timestamp claimed by alice (set automatically by createHypermessage)
+		"🕒": "1557277420"
 	},
-	"_params_": { // Meta data to find the signing address and verify authorship against the blockchain
-		"alias": "alice", // Authorship claimed by signer
+	"_params_": {
+		"alias": "alice",
 		"sig": "0x960d6263585365fc35ab58516dd3b205f41f7b6269e4024accce92ef404cc91e5ad29c928ac73ab5865de390dc969be6cec4230f112109d7147c86e731a32e671c",
-		"sig_type": "metamask_typed", // 'metamask_typed' or 'native'
-		"network": "main" // 'main' or 'rinkeby'
+		"sig_type": "metamask_typed",
+		"network": "main"
 	}
 }
 ```
