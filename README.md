@@ -58,7 +58,6 @@ It's worth noting that if you are using an injected provider, calling `connect()
 
 You only need MetaMask if your app's functionality involves users submitting transactions to the blockchain or signing data. If you're just using alias.earth to *read* data, you can let the core module handle that using its built-in Infura provider. Like this:
 
-
 ```js
 import earth from '@alias-earth/core';
 
