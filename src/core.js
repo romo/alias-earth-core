@@ -393,9 +393,9 @@ class AliasEarth {
 				this.options.provider = new Web3.providers.HttpProvider(DEFAULTS.provider[this.options.network]);
 			}
 
-			if (!this.options.network) {
-				throw Error("Network not found. Please specify 'main', 'rinkeby', 'ropsten', or 'kovan'");
-			}
+			// if (!this.options.network) {
+			// 	throw Error("Network not found. Please specify 'main', 'rinkeby', 'ropsten', or 'kovan'");
+			// }
 
 			if (!this.options.provider) {
 				throw Error('Ethereum provider not found');
@@ -833,6 +833,9 @@ class AliasEarth {
 		}, resolve);
 	}
 
+	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+	/* Hypermessage API */
+
 	async verifyHypermessage(data, options, resolve) {
 		return _op(async () => {
 
@@ -897,12 +900,9 @@ class AliasEarth {
 
 			// TODO add support for sigtype 'native'
 
-			if (!options || !options.encode) {
-				throw Error('Must specify \'encode\' as \'json\' or \'uri\' in options');
-			}
-
 			const _options = {
 				timestamp: true,
+				encode: 'json',
 				...options
 			};
 
@@ -958,24 +958,17 @@ class AliasEarth {
 	}
 }
 
-const getContractInstance = async ({ network, provider }, resolve) => { // Return web3 contract instance
+const getContractInstance = async (options, resolve) => { // Return web3 contract instance
 	return _op(async () => {
-		const _provider = provider || DEFAULTS.provider[network];
-		const web3 = new Web3(_provider);
-		let instance;
-
-		if (SUPPORTED_NETWORKS.indexOf(network) !== -1) { // Public network
-
-			const address = CONTRACT.address[network];
-			instance = await new web3.eth.Contract( // Load contract from address
-				abi, // Interface
-				address // Contract address
-			);
-
-		} else {
-			throw Error(`For the network option, please specify 'main', 'rinkeby', 'kovan', or 'ropsten'`);
-		}
-
+		const _options = options ? { ...DEFAULTS, ...options } : DEFAULTS;
+		const network = _options.network;
+		const provider = _options.provider[network];
+		const web3 = new Web3(provider);
+		const address = CONTRACT.address[network];
+		const instance = await new web3.eth.Contract( // Load contract from address
+			abi, // Interface
+			address // Contract address
+		);
 		return instance; // Return the contract instance
 	}, resolve);
 }

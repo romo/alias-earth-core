@@ -1,12 +1,179 @@
-### Welcome
+## Welcome
 
-Please [join developer Discord](https://discord.gg/UDbqesA) to participate in our experimental pre-release, we're seeking people willing to help us test and feedback to make sure everything integrates smoothly in a live environment.
+This package is a wrapper around a vanilla web3 contract instance providing a high-level JavaScript API to interact with alias.earth on the Ethereum blockchain [on the mainnet](https://etherscan.io/address/0x8F6A7781F54335D10d02bDD9ce66ACE1647AbCA7) or [on the Rinkeby testnet](https://rinkeby.etherscan.io/address/0x731C54d14d853af7f6CB587c680Efc1db11a3757) from any MetaMask-enabled browser or Node backend. We're seeking developers to build applications that users can interact with using their alias.earth name. Please [join developer Discord](https://discord.gg/UDbqesA) to see what others are bulding and to get answers for any questions (or ideas / feature requests!) in this experimental pre-release.
 
-### Intro
+## Contents
 
-@alias-earth/core is just a wrapper around a vanilla web3 contract instance, providing a high-level API to interact with the Ethereum blockchain. 
+#### Quick Start
+- [Usage with MetaMask](#quick-start-usage-with-metamask)
+- [Usage without MetaMask](#quick-start-usage-without-metamask)
 
-### Getting Started
+#### Reading Alias Data
+- [aliasExists](#reading-alias-data-alias-exists)
+- [isAddressAvailable](#reading-alias-data-is-address-available)
+- [getAliasFromAddress](#reading-alias-data-get-alias-from-address)
+- [getAddresses](#reading-alias-data-get-addresses)
 
-@alias-earth cire
+#### Hypermessage Protocol
+- [Anatomy of a Hypermessage](#hypermessage-protocol-anatomy)
+
+
+#### Utils
+
+## Quick Start
+
+`npm i --save @alias-earth/core`
+
+Assuming you're in a metamask enabled browser, all you have to do is import the module and call `connect()`. By default, alias.earth will use the injected provider at `window.ethereum` (if it exists) to connect to the Ethereum mainnet. **We're using the async/await syntax in these examples**, but you can also pass a function to `connect()` (or any asynchronous function in this API) as the second parameter which will be called in the standard Node-style `(err, result) => { ... }` callback pattern.
+
+#### <a name="quick-start-usage-with-metamask">Usage With MetaMask</a>
+
+```js
+import earth from '@alias-earth/core';
+
+// This example assumes we're in a browser and the
+// user has installed MetaMask
+
+let core;
+
+// ...
+
+try {
+
+	if (!window.ethereum) {
+		throw Error('Please install MetaMask');
+	}
+
+	core = await earth.connect();
+
+} catch (err) {
+	// Failed to connect
+}
+
+// now you call any API function using the 'core' object
+```
+
+It's worth noting that if you are using an injected provider, calling `connect()` will (if necessary) automatically handle calling `ethereum.enable()` under the hood, so you don't have to worry about that.
+
+#### <a name="quick-start-usage-without-metamask">Usage Without MetaMask</a>
+
+You only need MetaMask if your app's functionality involves users submitting transactions to the blockchain or signing data. If you're just using alias.earth to *read* data, you can let the core module handle that using its built-in Infura provider. Like this:
+
+
+```js
+import earth from '@alias-earth/core';
+
+// We don't need MetaMask in this example, so it will
+// work in any browser, or in a Node environment
+
+let core;
+
+try {
+
+	core = await earth.connect({ useOwnProvider: true });
+
+} catch (err) {
+	// Failed to connect
+}
+
+// Now you can call API functions that only *read* data from
+// the blockchain such as getAliasFromAddress({ address }) which
+// (as you might expect) returns the alias linked to a given address.
+```
+
+## Reading Alias Data
+
+#### <a name="reading-alias-data-alias-exists">aliasExists</a>
+
+```js
+const exists = await core.aliasExists('alice');
+console.log(exists); // true
+```
+
+Returns `true` if the given `alias` has ever been created.
+
+##### Parameters
+- `alias`: required, alias for which to check existence
+
+##### Returns `Boolean`
+
+#### <a name="reading-alias-data-is-address-available">isAddressAvailable</a>
+
+```js
+const available = await core.isAddressAvailable('0x19646E56d36615A1A723650a2c65E4311D84bE70');
+console.log(available); // false
+```
+
+Returns `true` if the given Etheruem `address` is or has ever been used as the managing address *or* the recovery address for any alias. This one-time-use policy for addresses is enforced by the contract to as a security measure.
+
+##### Parameters
+- `address`: required, address for which to check availability
+
+##### Returns `Boolean`
+
+#### <a name="reading-alias-data-get-alias-from-address">getAliasFromAddress</a>
+
+```js
+const alias = await core.getAliasFromAddress('0x19646E56d36615A1A723650a2c65E4311D84bE70');
+console.log(alias); // 'alice'
+```
+
+Returns the `alias` (if any) currently linked to a given Etheruem `address`. If the address is currently unlinked, return an empty string.
+
+##### Parameters
+- `address`: required, address for which to find linked alias
+
+##### Returns `String`
+
+#### <a name="reading-alias-data-get-addresses">getAddresses</a>
+
+```js
+const { linked, recovery } = await core.getAddresses('alice');
+console.log(linked); // '0x19646E56d36615A1A723650a2c65E4311D84bE70'
+console.log(recovery); // '0x01061E883d375C36fE30776d1aba3627bfbd67BC'
+```
+
+Returns and object with both the `linked` and `recovery` addresses for a given `alias`. If either doesn't exist (in the case of the linked address the only way that could happen is if the alias itself didn't exist), return an empty string for that address.
+
+##### Parameters
+- `alias`: required, alias for which to find linked and recovery addresses
+
+##### Returns `Object`
+- `Object` *addresses*
+  - `linked`: String, primary linked address
+  - `recovery`: String, recovery address
+
+## Hypermessage Protocol
+
+The core module provides functions for creating and verifying signed data linked to an identity on the blockchain in a standardized way. Creating signed messages in a consistent way is important not only becuase a the receiver has to know how to structure the data in order to verify it's signature, but also to promote interoperability between platforms that support alias.earth.
+
+#### <a name="hypermessage-protocol-anatomy">Anatomy of a Hypermessage</a>
+
+```json
+{
+	"_signed_": { // Data that was signed
+		"foo": "bar", // Arbitrary data
+		"fooo": "baaar",
+		"🕒": "1557277420" // Timestamp claimed by alice (set automatically by createHypermessage)
+	},
+	"_params_": { // Meta data to find the signing address and verify authorship against the blockchain
+		"alias": "alice", // Authorship claimed by signer
+		"sig": "0x960d6263585365fc35ab58516dd3b205f41f7b6269e4024accce92ef404cc91e5ad29c928ac73ab5865de390dc969be6cec4230f112109d7147c86e731a32e671c",
+		"sig_type": "metamask_typed", // 'metamask_typed' or 'native'
+		"network": "main" // 'main' or 'rinkeby'
+	}
+}
+```
+
+A hypermessage has two parts: The `_signed_` object is the actual data that is signed by on the client using MetaMask. The `_params_` object is meta data which allows that receiver (such as an API server) to verify the signature (i.e. find the signing Ethereum address) and look up which alias that address is linked to on the blockchain.
+
+## Utils
+
+
+
+
+
+
+
+
 
