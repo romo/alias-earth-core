@@ -390,7 +390,7 @@ class AliasEarth {
 					// TODO Prompt user to install MetaMask
 				}
 			} else { // Not in browser
-				this.options.provider = new Web3.providers.HttpProvider(DEFAULTS.provider[this.options.network]);
+				this.options.provider = getDefaultHttpProvider(this.options.network);
 			}
 
 			// if (!this.options.network) {
@@ -958,11 +958,20 @@ class AliasEarth {
 	}
 }
 
+const getDefaultHttpProvider = (network) => {
+	return new Web3.providers.HttpProvider(DEFAULTS.provider[network]);
+};
+
 const getContractInstance = async (options, resolve) => { // Return web3 contract instance
 	return _op(async () => {
 		const _options = options ? { ...DEFAULTS, ...options } : DEFAULTS;
 		const network = _options.network;
-		const provider = _options.provider[network];
+		const provider = _options.useOwnProvider ? getDefaultHttpProvider(network) : _options.provider;
+
+		if (!provider) {
+			throw Error('Ethereum provider not found');
+		}
+
 		const web3 = new Web3(provider);
 		const address = CONTRACT.address[network];
 		const instance = await new web3.eth.Contract( // Load contract from address
