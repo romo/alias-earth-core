@@ -261,17 +261,16 @@ app.post('/message', (req, res) => {
 
 	console.log(req.hypermessage); // { id: '0x...', signed: { ... }, params: { ... }, author: { ... }, received: 1557277420 }
 });
+
+earth.connect({ network: 'main' }, (err, core) => {
+	if (err) {
+		console.log('Connect to Ethereum provider failed');
+	} else {
+
+		// HypermessageParser is expecting a reference
+		// to 'core' set on the express app object
+		app.set('core', core);
+		app.listen(process.env.PORT || 3001);
+	}
+});
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
