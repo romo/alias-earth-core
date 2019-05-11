@@ -153,7 +153,9 @@ const packTypedData = (data) => {
 			value: typeof value === 'string' ? value : JSON.stringify(value)
 		};
 	}).sort((a, b) => {
-		return a.name.localeCompare(b.name);
+		const _a = utf8ToHex(a.name).substring(2);
+		const _b = utf8ToHex(b.name).substring(2);
+		return _a.localeCompare(_b);
 	});
 }
 
