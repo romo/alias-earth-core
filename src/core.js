@@ -718,6 +718,40 @@ class AliasEarth {
 		}, resolve);
 	}
 
+	getNormalizedAliasData(options, resolve) {
+		return _op(async () => {
+			const _options = options || {};
+			const { fromBlock, toBlock } = _options;
+			const logs = await this.getLogs({
+				event: 'DirRecord',
+				fromBlock,
+				toBlock
+			});
+
+			const normalized = {};
+			for (let item of logs) {
+				const { event, data, blockNumber, transactionHash, timestamp } = item;
+				const { alias, address, newAddress } = data;
+				if (normalized[alias]) {
+					normalized[alias].address = newAddress;
+				} else {
+					const initial = event === 'create_alias' ? {
+						address,
+						blockNumber,
+						transactionHash,
+						timestamp
+					} : {};
+					normalized[alias] = {
+						address: newAddress,
+						...initial
+					};
+				}
+			}
+
+			return normalized;
+		}, resolve);
+	}
+
 	/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 	/* Funds API */
 
